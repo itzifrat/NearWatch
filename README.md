@@ -4,11 +4,9 @@
 
 ## 📖 The Story
 
-This project was born out of frustration.
+This project was born out of frustration, & From a long-distance relationship, my friends are scattered across different cities. Like many people, we tried to keep our movie nights alive using standard tools like Discord, Zoom, or Google Meet.
 
-I am in a long-distance relationship, and my friends are scattered across different cities. Like many people, we tried to keep our movie nights alive using standard tools like Discord, Zoom, or Google Meet.
-
-**The experience was awful.**
+**And the experience was awful.**
 
 * **The Lag:** "Wait, did you see that?" "No, I'm 5 seconds behind."
 * **The Quality:** The stream would pixelate into a blurry mess during action scenes.
@@ -18,4 +16,4 @@ I realized that **conference tools are built for static slides and talking heads
 
 As a UI/UX designer and developer, I couldn't handle the friction anymore. I wanted a platform that prioritized video synchronization above all else. I wanted to replicate the feeling of sitting on the same couch, even when we were miles apart.
 
-So, I built **NearWatch**.
+So, I built **NearWatch**. Watch Together, Feel Together.
