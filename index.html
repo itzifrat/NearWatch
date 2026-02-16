@@ -139,12 +139,11 @@
 
     <script>
         // --- CONFIG ---
-        // Generates a random ID for PeerJS cloud
         const generateId = () => Math.random().toString(36).substring(2, 7);
-        
         let peer;
-        let connections = []; // For Host: list of guests
-        let hostConn = null;  // For Guest: connection to host
+        let connections = []; // Host uses this to track guests
+        let hostConn = null;  // Guest uses this to track host
+        let isSyncing = false; // Prevents echo loops
         
         const state = {
             mode: 'create', // 'create' or 'join'
@@ -168,7 +167,6 @@
             }
             initWebcam();
             
-            // Check URL for join ID
             const urlParams = new URLSearchParams(window.location.search);
             if(urlParams.get('join')) {
                 switchMode('join');
@@ -202,7 +200,6 @@
         function selectAvatar(av, col) {
             state.avatar = av; state.color = col;
             document.querySelectorAll('.avatar-option').forEach(el => el.classList.remove('selected'));
-            // Visual selection logic would go here
         }
 
         async function handleStart() {
@@ -220,7 +217,7 @@
             } else {
                 const hostId = document.getElementById('room-id-input').value.trim();
                 if(!hostId) return alert("Enter Host ID");
-                state.id = generateId(); // Guests also need an ID
+                state.id = generateId(); 
                 initPeer(state.id, hostId);
             }
         }
@@ -238,17 +235,17 @@
             });
 
             peer.on('connection', (conn) => {
+                // Anyone connecting to me
+                connections.push(conn);
+                setupConnection(conn);
+                
+                // If I am Host, send immediate state sync to new guest
                 if(state.mode === 'create') {
-                    // I am Host, Guest connected
-                    connections.push(conn);
-                    setupConnection(conn);
-                    addSystemMsg("A user connected!");
-                    // Send current state
+                    addSystemMsg("User connected. Syncing...");
+                    // Give connection time to stabilize then send state
                     setTimeout(() => {
-                        conn.send({ type: 'sync-full', video: state.video });
+                        if(conn.open) conn.send({ type: 'sync-full', video: state.video });
                     }, 1000);
-                } else {
-                    // Guests shouldn't really accept random connections in this simple model
                 }
             });
 
@@ -277,11 +274,10 @@
                 handleData(data, conn);
             });
             conn.on('close', () => {
-                if(state.mode === 'create') {
-                    connections = connections.filter(c => c !== conn);
-                    addSystemMsg("User disconnected");
-                } else {
-                    alert("Host disconnected. Room closed.");
+                connections = connections.filter(c => c !== conn);
+                addSystemMsg("User disconnected");
+                if(state.mode === 'join' && conn === hostConn) {
+                    alert("Host disconnected.");
                     location.reload();
                 }
             });
@@ -298,23 +294,28 @@
 
         // --- DATA HANDLING ---
         function handleData(data, senderConn) {
-            console.log("Received:", data);
+            // Log for debugging
+            // console.log("Received:", data);
             
             if(data.type === 'chat') {
                 addChat(data.user, data.msg, data.avatar, data.color);
-                // If I am host, broadcast to others
+                // If Host, relay to others
                 if(state.mode === 'create') broadcast(data, senderConn);
             }
             else if (data.type === 'video-action') {
+                // Apply change, preventing loop
                 applyVideoAction(data.action, data.val);
-                // If Host, broadcast
+                // If Host, relay to others
                 if(state.mode === 'create') broadcast(data, senderConn);
             }
             else if (data.type === 'sync-full') {
-                // Initial Sync for Guest
+                // Initial load
                 if(data.video.type === 'youtube') {
                     document.getElementById('url-input').value = `https://youtu.be/${data.video.src}`;
-                    loadVideo(true); // true = remote
+                    state.video = data.video; // Update state before loading
+                    loadVideo(true);
+                } else if(data.video.type === 'file') {
+                    addSystemMsg("Host is playing a local file. Please load same file to sync.");
                 }
             }
         }
@@ -325,11 +326,13 @@
             });
         }
 
-        // --- VIDEO LOGIC ---
+        // --- VIDEO LOGIC & SYNC CORE ---
         function initYouTube() {
-            const tag = document.createElement('script');
-            tag.src = "https://www.youtube.com/iframe_api";
-            document.body.appendChild(tag);
+            if(!window.YT) {
+                const tag = document.createElement('script');
+                tag.src = "https://www.youtube.com/iframe_api";
+                document.body.appendChild(tag);
+            }
         }
 
         function loadVideo(isRemote = false) {
@@ -337,17 +340,20 @@
             const ytId = extractYouTubeId(url);
             
             if(ytId) {
-                state.video = { type: 'youtube', src: ytId, time: 0, state: 'paused' };
+                state.video.type = 'youtube';
+                state.video.src = ytId;
+                
                 activatePlayer('youtube');
                 if(!state.ytPlayer) {
                     state.ytPlayer = new YT.Player('youtube-player', {
                         height: '100%', width: '100%', videoId: ytId,
-                        playerVars: { autoplay: 1, controls: 0 },
+                        playerVars: { autoplay: 1, controls: 0, rel: 0 },
                         events: { onStateChange: onPlayerStateChange }
                     });
                 } else {
                     state.ytPlayer.loadVideoById(ytId);
                 }
+                // Send change event if I triggered it
                 if(!isRemote) sendVideoAction('change', { type: 'youtube', src: ytId });
             }
         }
@@ -357,61 +363,85 @@
             if(!file) return;
             const url = URL.createObjectURL(file);
             
-            state.video = { type: 'file', src: null, time: 0, state: 'paused' }; // src null because blobs are local
+            state.video.type = 'file';
             activatePlayer('html5');
             const v = document.getElementById('html5-player');
             v.src = url;
             
-            // Listeners
             v.onplay = () => sendVideoAction('play', v.currentTime);
             v.onpause = () => sendVideoAction('pause', v.currentTime);
             v.onseeked = () => sendVideoAction('seek', v.currentTime);
             
-            // Note: Cannot sync actual file bits P2P easily in browser without huge data usage.
-            // We assume users have same file or we just sync timing "blindly".
-            addSystemMsg("Local file loaded. Syncing time only.");
+            addSystemMsg("Local file loaded.");
         }
 
+        // Triggered when Player State Changes (Local click OR Programmatic)
         function onPlayerStateChange(e) {
-            // Prevent loops by checking who initiated
+            // Guard: If we are currently syncing a remote action, DO NOT send a broadcast
+            if(isSyncing) return;
+
             if(e.data == YT.PlayerState.PLAYING) sendVideoAction('play', state.ytPlayer.getCurrentTime());
             if(e.data == YT.PlayerState.PAUSED) sendVideoAction('pause', state.ytPlayer.getCurrentTime());
+            // Buffering can sometimes trigger unwanted events, usually safe to ignore for simple sync
         }
 
         function sendVideoAction(action, val) {
+            if(isSyncing) return; // Double check
+
             const data = { type: 'video-action', action, val };
+            
+            // Update local state record
+            if(action === 'play') state.video.state = 'playing';
+            if(action === 'pause') state.video.state = 'paused';
+            if(action === 'seek') state.video.time = val;
+
             if(state.mode === 'create') broadcast(data);
             else if(hostConn && hostConn.open) hostConn.send(data);
         }
 
         function applyVideoAction(action, val) {
+            // SET LOCK: Prevent listeners from broadcasting this change back
+            isSyncing = true;
+
             const yt = state.ytPlayer;
             const h5 = document.getElementById('html5-player');
             
-            if(state.video.type === 'youtube' && yt) {
+            // Apply to YouTube
+            if(state.video.type === 'youtube' && yt && yt.getPlayerState) {
                 if(action === 'play') {
+                    // Sync time if drift > 1s
                     if(Math.abs(yt.getCurrentTime() - val) > 1) yt.seekTo(val);
                     yt.playVideo();
                 }
-                if(action === 'pause') yt.pauseVideo();
+                if(action === 'pause') {
+                    yt.seekTo(val); // Ensure pause on exact frame
+                    yt.pauseVideo();
+                }
                 if(action === 'seek') yt.seekTo(val);
                 if(action === 'change') {
                     document.getElementById('url-input').value = `https://youtu.be/${val.src}`;
                     loadVideo(true);
                 }
-            } else if (state.video.type === 'file' || !state.video.type) {
-                // If generic or file
-                if(action === 'play') { h5.currentTime = val; h5.play().catch(e=>{}); }
-                if(action === 'pause') h5.pause();
+            } 
+            // Apply to HTML5
+            else if (state.video.type === 'file') {
+                if(action === 'play') { 
+                    if(Math.abs(h5.currentTime - val) > 1) h5.currentTime = val;
+                    h5.play().catch(e=>{}); 
+                }
+                if(action === 'pause') { h5.pause(); h5.currentTime = val; }
                 if(action === 'seek') h5.currentTime = val;
             }
+
+            // RELEASE LOCK after short delay to allow events to fire
+            setTimeout(() => { isSyncing = false; }, 500);
         }
 
         function activatePlayer(type) {
             document.getElementById('placeholder').classList.add('hidden');
             const h5 = document.getElementById('html5-player');
             const yt = document.getElementById('youtube-player');
-            if(type === 'youtube') { h5.classList.add('hidden'); yt.style.display = 'block'; }
+            if(type === 'youtube') { h5.classList.add('hidden'); h5.pause(); yt.style.display = 'block'; }
             else { yt.style.display = 'none'; h5.classList.remove('hidden'); }
         }
 
@@ -441,9 +471,9 @@
             const div = document.createElement('div');
             div.className = `flex gap-2 ${isMe ? 'flex-row-reverse' : ''}`;
             div.innerHTML = `
-                <div class="w-8 h-8 rounded-full ${color} flex items-center justify-center text-xs shrink-0">${avatar}</div>
-                <div class="${isMe ? 'bg-blue-600' : 'bg-slate-800'} p-2 rounded-lg text-sm max-w-[80%]">
-                    <p class="text-[10px] opacity-70 mb-0.5">${user}</p>
+                <div class="w-8 h-8 rounded-full ${color} flex items-center justify-center text-xs shrink-0 text-white shadow-sm">${avatar}</div>
+                <div class="${isMe ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-200'} p-2 rounded-lg text-sm max-w-[80%] shadow-md">
+                    <p class="text-[10px] opacity-70 mb-0.5 font-bold uppercase">${user}</p>
                     <p>${msg}</p>
                 </div>
             `;
@@ -454,14 +484,13 @@
         function addSystemMsg(text) {
             const box = document.getElementById('chat-container');
             const div = document.createElement('div');
-            div.className = "text-center text-[10px] text-slate-500 my-2 bg-slate-800/50 py-1 rounded";
+            div.className = "text-center text-[10px] text-slate-500 my-2 bg-slate-800/50 py-1 rounded mx-auto px-2 inline-block";
             div.innerText = text;
             box.appendChild(div);
+            box.scrollTop = box.scrollHeight;
         }
 
-        // --- WEBCAM (Local Only for Demo/P2P Mesh is complex for 1 file) ---
-        // * Note: To sync webcams via P2P Mesh in 1 file requires `peer.call` logic
-        // * For this scope, we keep local preview active.
+        // --- WEBCAM (Local) ---
         async function initWebcam() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({video: true, audio: true});
@@ -483,8 +512,8 @@
         }
         function copyId() {
             const id = document.getElementById('my-peer-id').innerText;
+            if(id === '...') return;
             navigator.clipboard.writeText(id).then(() => alert("ID Copied!"));
-            // Update URL for easy sharing
             const url = window.location.origin + window.location.pathname + '?join=' + id;
             console.log("Share URL:", url);
         }
