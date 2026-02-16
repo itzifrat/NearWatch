@@ -112,6 +112,16 @@
             background: #334155;
             border-radius: 2px;
         }
+        
+        .tab-btn {
+            @apply flex-1 py-2 text-sm font-medium border-b-2 transition-colors duration-200;
+        }
+        .tab-btn.active {
+            @apply border-blue-500 text-blue-400;
+        }
+        .tab-btn.inactive {
+            @apply border-transparent text-slate-500 hover:text-slate-300;
+        }
     </style>
 </head>
 <body class="h-screen w-screen relative">
@@ -188,11 +198,17 @@
                     <i data-lucide="monitor-play" class="text-white w-8 h-8"></i>
                 </div>
                 <h1 class="text-2xl font-bold text-white">ZG WatchTogether</h1>
-                <p class="text-slate-400 text-sm">Join a room to watch in sync.</p>
+                <p class="text-slate-400 text-sm">Create or join a room to watch in sync.</p>
             </div>
 
             <div id="login-loader" class="hidden flex justify-center py-4">
                 <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+            </div>
+
+            <!-- Login Tabs -->
+            <div class="flex mb-6 border-b border-slate-700">
+                <button onclick="setLoginMode('join')" id="tab-join" class="tab-btn active w-1/2">Join Room</button>
+                <button onclick="setLoginMode('create')" id="tab-create" class="tab-btn inactive w-1/2">Create Room</button>
             </div>
 
             <form id="login-form" onsubmit="handleLogin(event)" class="space-y-5">
@@ -214,19 +230,26 @@
                     <label class="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">Display Name</label>
                     <input type="text" id="username-input" required placeholder="Enter your name" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none transition">
                 </div>
+
+                <!-- Create Mode: Room Name -->
+                <div id="create-room-fields" class="hidden">
+                    <label class="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">Room Name</label>
+                    <input type="text" id="create-room-name" placeholder="e.g. Saturday Movie Night" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none transition">
+                </div>
                 
                 <div>
                     <label class="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">Room ID</label>
                     <div class="flex gap-2">
-                        <input type="text" id="room-input" placeholder="e.g. movie-night" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none transition">
-                        <button type="button" onclick="generateRoomId()" class="bg-slate-700 hover:bg-slate-600 text-white px-3 rounded-lg" title="Generate Random ID">
+                        <input type="text" id="room-input" required placeholder="Enter ID to join" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none transition">
+                        <button type="button" onclick="generateRoomId()" class="bg-slate-700 hover:bg-slate-600 text-white px-3 rounded-lg" title="Shuffle / Generate Random ID">
                             <i data-lucide="shuffle" class="w-4 h-4"></i>
                         </button>
                     </div>
+                    <p class="text-[10px] text-slate-500 mt-1 hidden" id="id-help-text">Share this ID with friends so they can join.</p>
                 </div>
 
-                <button type="submit" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-3 rounded-lg shadow-lg transform active:scale-95 transition-all">
-                    Enter Room
+                <button type="submit" id="login-submit-btn" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-3 rounded-lg shadow-lg transform active:scale-95 transition-all">
+                    Join Room
                 </button>
             </form>
         </div>
@@ -461,7 +484,8 @@
             lastSeek: 0,
             playbackSpeed: 1.0,
             videoUrl: null,
-            videoId: null
+            videoId: null,
+            loginMode: 'join' // 'join' or 'create'
         };
 
         // --- INIT ---
@@ -471,7 +495,9 @@
             
             // Check URL for room
             const urlParams = new URLSearchParams(window.location.search);
-            if(urlParams.get('room')) document.getElementById('room-input').value = urlParams.get('room');
+            if(urlParams.get('room')) {
+                document.getElementById('room-input').value = urlParams.get('room');
+            }
             
             // Auth anonymously first
             try {
@@ -485,7 +511,35 @@
             }
         };
 
-        // --- LOGIN & PROFILE ---
+        // --- LOGIN LOGIC ---
+        window.setLoginMode = (mode) => {
+            state.loginMode = mode;
+            const btnJoin = document.getElementById('tab-join');
+            const btnCreate = document.getElementById('tab-create');
+            const createFields = document.getElementById('create-room-fields');
+            const submitBtn = document.getElementById('login-submit-btn');
+            const helpText = document.getElementById('id-help-text');
+            const roomInput = document.getElementById('room-input');
+
+            if (mode === 'create') {
+                btnJoin.classList.replace('active', 'inactive');
+                btnCreate.classList.replace('inactive', 'active');
+                createFields.classList.remove('hidden');
+                submitBtn.innerText = "Create Room";
+                submitBtn.className = "w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-3 rounded-lg shadow-lg transform active:scale-95 transition-all";
+                helpText.classList.remove('hidden');
+                // Auto generate ID if empty
+                if(!roomInput.value) window.generateRoomId();
+            } else {
+                btnJoin.classList.replace('inactive', 'active');
+                btnCreate.classList.replace('active', 'inactive');
+                createFields.classList.add('hidden');
+                submitBtn.innerText = "Join Room";
+                submitBtn.className = "w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-3 rounded-lg shadow-lg transform active:scale-95 transition-all";
+                helpText.classList.add('hidden');
+            }
+        };
+
         window.handleLogin = async (e) => {
             e.preventDefault();
             const username = document.getElementById('username-input').value.trim();
@@ -494,6 +548,17 @@
             const color = document.getElementById('selected-color').value;
 
             if(!username) return;
+
+            // Create Mode Validation
+            let roomName = null;
+            if(state.loginMode === 'create') {
+                roomName = document.getElementById('create-room-name').value.trim();
+                if(!roomName) {
+                    window.toast("Please enter a Room Name", "error");
+                    document.getElementById('create-room-name').focus();
+                    return;
+                }
+            }
 
             document.getElementById('login-form').classList.add('hidden');
             document.getElementById('login-loader').classList.remove('hidden');
@@ -507,37 +572,52 @@
             // Persist
             localStorage.setItem('zg_profile', JSON.stringify({ name: username, avatar, color }));
 
-            // Connect to Room
-            await joinRoom(room);
+            // Connect to Room (Pass Room Name if creating)
+            await joinRoom(room, roomName);
 
             // UI
             document.getElementById('login-view').classList.add('hidden');
             document.getElementById('app-view').classList.remove('hidden');
             updateUIProfile();
             
-            toast(`Joined ${room}`, 'success');
+            toast(state.loginMode === 'create' ? `Room Created!` : `Joined ${room}`, 'success');
             await initWebcam();
             initYouTubeAPI();
         };
 
         // --- FIREBASE SYNC CORE ---
-        async function joinRoom(roomId) {
+        async function joinRoom(roomId, roomName = null) {
             const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId);
             
             // Initial check/create
             try {
                 const snap = await getDoc(roomRef);
+                
+                // If room doesn't exist, create it (Standard Logic)
                 if (!snap.exists()) {
                     await setDoc(roomRef, {
                         createdAt: Date.now(),
                         host: state.user.uid,
                         video: { type: null, id: null, url: null, status: 'paused', time: 0, speed: 1.0, lastUpdate: Date.now() },
                         chat: [],
-                        settings: { hostOnly: false }
+                        settings: { 
+                            hostOnly: false,
+                            name: roomName || "Watch Room" // Save the name here
+                        }
                     });
                     state.user.isHost = true;
-                    // Add system message via broadcastChat (requires setup, skipping for brevity in init)
+                    if(roomName) {
+                         // Update UI immediately for creator
+                         document.getElementById('current-room-display').innerText = roomName;
+                         document.getElementById('setting-room-name').value = roomName;
+                    }
                 } else {
+                    // Room exists
+                    if(state.loginMode === 'create') {
+                        // Edge case: User tried to create a room that exists. 
+                        // We just join it. Maybe warn? For now, we proceed as join.
+                        window.toast("Room ID exists. Joining...", "info");
+                    }
                     if(snap.data().host === state.user.uid) state.user.isHost = true;
                 }
             } catch(e) { console.error("Room init error", e); }
@@ -557,7 +637,14 @@
 
         function handleRoomUpdate(data) {
             // 1. Settings
-            if(data.settings) state.settings = data.settings;
+            if(data.settings) {
+                state.settings = data.settings;
+                // Update Room Name in Header if it exists in settings
+                if(data.settings.name) {
+                    document.getElementById('current-room-display').innerText = data.settings.name;
+                    document.getElementById('setting-room-name').value = data.settings.name;
+                }
+            }
             
             // 2. Chat Sync
             if(data.chat && data.chat.length > 0) {
@@ -707,6 +794,8 @@
             // Room
             const rName = document.getElementById('setting-room-name').value;
             if(rName && state.user.isHost) {
+                 const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', state.room);
+                 await updateDoc(roomRef, { 'settings.name': rName });
                  document.getElementById('current-room-display').innerText = rName;
             }
 
