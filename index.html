@@ -18,29 +18,12 @@
         :root { --bg-dark: #0f172a; --primary: #3b82f6; }
         body { background-color: var(--bg-dark); color: #e2e8f0; font-family: 'Inter', sans-serif; overflow: hidden; }
         
-        /* Video Container - Responsive Aspect Ratio */
-        .video-wrapper {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .video-container { 
-            position: relative; 
-            width: 100%; 
-            max-width: 100%;
-            max-height: 100%;
-            aspect-ratio: 16/9;
-            background: black; 
-            border-radius: 12px; 
-            overflow: hidden; 
-            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); 
-            transition: box-shadow 0.3s; 
-        }
+        /* Video & UI Styles */
+        .video-container { position: relative; width: 100%; max-width: 100%; aspect-ratio: 16/9; background: black; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); transition: box-shadow 0.3s; }
         .video-container:hover { box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7); }
         .video-container iframe, .video-container video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; outline: none; }
-        
+        .video-wrapper { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+
         /* Animations */
         .fade-in { animation: fadeIn 0.5s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
@@ -60,13 +43,9 @@
         ::-webkit-scrollbar-track { background: #0f172a; }
         ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
 
-        /* Mobile Sidebar Transition */
-        .mobile-sidebar {
-            transition: transform 0.3s ease-in-out;
-        }
-        .mobile-sidebar.closed {
-            transform: translateX(100%);
-        }
+        /* Mobile Sidebar */
+        .mobile-sidebar { transition: transform 0.3s ease-in-out; }
+        .mobile-sidebar.closed { transform: translateX(100%); }
     </style>
 </head>
 <body class="h-screen w-screen relative flex flex-col">
@@ -138,8 +117,9 @@
                     <button onclick="switchMode('join')" id="btn-mode-join" class="tab-btn inactive">Join Room</button>
                 </div>
 
-                <div id="join-input-group" class="hidden">
-                    <input type="text" id="room-id-input" placeholder="Enter Room ID" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none transition">
+                <div id="join-input-group">
+                    <input type="text" id="room-id-input" placeholder="Custom Room ID (Optional)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none transition">
+                    <p class="text-[10px] text-slate-500 mt-1 pl-1" id="id-hint">Leave blank for random ID</p>
                 </div>
 
                 <button onclick="handleStart()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg shadow-lg transition transform active:scale-95" id="action-btn">Create Room</button>
@@ -287,6 +267,7 @@
         let isSyncing = false; // Lock to prevent loop
         let localStream = null;
         let apiKey = ""; // AI Key
+        let connTimeout = null;
 
         const state = {
             mode: 'create', // create | join
@@ -332,21 +313,24 @@
             state.mode = mode;
             const btnCreate = document.getElementById('btn-mode-create');
             const btnJoin = document.getElementById('btn-mode-join');
-            const joinInput = document.getElementById('join-input-group');
             const actionBtn = document.getElementById('action-btn');
+            const idInput = document.getElementById('room-id-input');
+            const idHint = document.getElementById('id-hint');
 
             if(mode === 'create') {
                 btnCreate.classList.replace('inactive', 'active');
                 btnJoin.classList.replace('active', 'inactive');
-                joinInput.classList.add('hidden');
                 actionBtn.innerText = "Start Hosting";
                 actionBtn.classList.replace('bg-emerald-600', 'bg-blue-600');
+                idInput.placeholder = "Custom Room ID (Optional)";
+                idHint.classList.remove('hidden');
             } else {
                 btnJoin.classList.replace('inactive', 'active');
                 btnCreate.classList.replace('active', 'inactive');
-                joinInput.classList.remove('hidden');
                 actionBtn.innerText = "Join Room";
                 actionBtn.classList.replace('bg-blue-600', 'bg-emerald-600');
+                idInput.placeholder = "Enter Host ID to Join";
+                idHint.classList.add('hidden');
             }
         }
 
@@ -368,32 +352,55 @@
                 name, avatar: state.avatar, color: state.color, apiKey
             }));
 
-            document.getElementById('action-btn').disabled = true;
-            document.getElementById('status-msg').innerText = "Connecting to P2P Cloud...";
+            // Button Loading State
+            const btn = document.getElementById('action-btn');
+            btn.disabled = true;
+            btn.innerText = "Connecting...";
+            document.getElementById('status-msg').innerText = "Connecting to Network...";
+
+            // ID Logic
+            const inputId = document.getElementById('room-id-input').value.trim().replace(/[^a-zA-Z0-9-_]/g, '');
 
             if(state.mode === 'create') {
-                state.id = generateId();
+                // If user provided ID, try to use it. Else generate random.
+                state.id = inputId || generateId();
                 state.hostOnly = false; // Default
                 initPeer(state.id);
             } else {
-                const hostId = document.getElementById('room-id-input').value.trim();
-                if(!hostId) return toast("Enter Host ID", "error");
-                state.id = generateId(); // Guest needs random ID
-                initPeer(state.id, hostId);
+                if(!inputId) {
+                    resetLoginUI("Enter a Host ID to join.");
+                    return;
+                }
+                // Guests need their own ID to connect
+                state.id = generateId(); 
+                initPeer(state.id, inputId);
             }
+        }
+
+        function resetLoginUI(msg = "") {
+            const btn = document.getElementById('action-btn');
+            btn.disabled = false;
+            btn.innerText = state.mode === 'create' ? "Start Hosting" : "Join Room";
+            document.getElementById('status-msg').innerText = "";
+            if(msg) toast(msg, "error");
         }
 
         // --- PEERJS LOGIC ---
         function initPeer(myId, targetHostId = null) {
-            peer = new Peer(myId, { debug: 1 });
+            // Clean ID just in case
+            const cleanId = myId.replace(/[^a-zA-Z0-9-_]/g, '');
+            peer = new Peer(cleanId, { debug: 1 });
 
             peer.on('open', (id) => {
-                enterApp(id);
-                if(targetHostId) connectToHost(targetHostId);
-                else {
+                // Connection successful
+                if(targetHostId) {
+                    connectToHost(targetHostId);
+                } else {
+                    // I am Host
+                    enterApp(id);
                     setStatus("Hosting", "bg-blue-500");
                     addSystemMsg(`Room Created. Share ID: ${id}`);
-                    document.getElementById('host-settings-group').classList.remove('hidden'); // Show host controls
+                    document.getElementById('host-settings-group').classList.remove('hidden');
                 }
             });
 
@@ -414,23 +421,50 @@
 
             peer.on('error', (err) => {
                 console.error(err);
-                toast("Connection Error: " + err.type, "error");
+                let msg = "Connection Error";
+                if(err.type === 'unavailable-id') msg = "ID already taken. Try another.";
+                if(err.type === 'peer-unavailable') msg = "Host not found.";
+                
+                toast(msg, "error");
+                resetLoginUI(msg);
+                
+                // If we are already in app (rare), reload
+                if(!document.getElementById('login-view').classList.contains('hidden')) {
+                    // stay on login
+                }
             });
         }
 
         function connectToHost(hostId) {
             hostConn = peer.connect(hostId);
-            setStatus("Connecting...", "bg-yellow-500");
+            document.getElementById('status-msg').innerText = "Locating Host...";
             
+            // Timeout Check
+            connTimeout = setTimeout(() => {
+                if(!hostConn || !hostConn.open) {
+                    resetLoginUI("Connection timed out. Is Host online?");
+                    if(peer) peer.destroy();
+                }
+            }, 5000);
+
             hostConn.on('open', () => {
+                clearTimeout(connTimeout);
+                enterApp(hostId); // Show UI, display Host ID at top
                 setStatus("Connected", "bg-emerald-500");
                 addSystemMsg("Joined Room!");
                 setupConnection(hostConn);
+                // Update Peer ID display to show who we connected to, not our random ID
+                document.getElementById('my-peer-id').innerText = hostId;
             });
             
             hostConn.on('close', () => {
                 toast("Host Disconnected", "error");
                 setTimeout(() => location.reload(), 2000);
+            });
+            
+            hostConn.on('error', (e) => {
+                clearTimeout(connTimeout);
+                resetLoginUI("Could not connect to Host.");
             });
         }
 
@@ -441,7 +475,8 @@
         function enterApp(id) {
             document.getElementById('login-view').classList.add('hidden');
             document.getElementById('app-view').classList.remove('hidden');
-            document.getElementById('my-peer-id').innerText = id;
+            // If host, show my ID. If guest, ID is updated in connectToHost
+            if(state.mode === 'create') document.getElementById('my-peer-id').innerText = id;
             updateProfileUI();
             initYouTube();
         }
