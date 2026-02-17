@@ -5,41 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>NearWatch | P2P Encrypted</title>
     
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    
-    <!-- PeerJS (Networking) -->
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <!-- FIX 1: Use a specific, stable PeerJS version -->
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 
     <style>
         :root { --bg-dark: #0b0e14; --primary: #6366f1; --surface: #151923; }
         body { background-color: var(--bg-dark); color: #e2e8f0; font-family: 'Inter', sans-serif; overflow: hidden; }
         
-        /* Video Container Responsive Logic */
-        .video-wrapper {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #000;
-        }
-        .video-container { 
-            position: relative; 
-            width: 100%;
-            max-width: 100%;
-            aspect-ratio: 16/9;
-            max-height: 80vh; /* Prevent cut-off on laptops */
-            background: black; 
-            overflow: hidden; 
-            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); 
-        }
+        .video-wrapper { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #000; }
+        .video-container { position: relative; width: 100%; max-width: 100%; aspect-ratio: 16/9; max-height: 80vh; background: black; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); }
         .video-container iframe, .video-container video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; outline: none; }
 
-        /* Animations */
         .fade-in { animation: fadeIn 0.5s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .toast-enter { animation: slideIn 0.3s ease-out forwards; }
@@ -49,34 +27,27 @@
         .avatar-option:hover { opacity: 1; transform: scale(1.05); }
         .avatar-option.selected { opacity: 1; transform: scale(1.15); border-color: var(--primary); box-shadow: 0 0 15px rgba(99, 102, 241, 0.6); }
         
-        /* Custom Scrollbar */
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: var(--bg-dark); }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
 
-        /* Mobile Sidebar */
-        .mobile-sidebar { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        .mobile-sidebar.closed { transform: translateX(100%); }
-        
-        /* Quote Ticker */
         .quote-fade { animation: fadeInOut 8s infinite; }
-        @keyframes fadeInOut {
-            0%, 100% { opacity: 0; transform: translateY(5px); }
-            10%, 90% { opacity: 1; transform: translateY(0); }
-        }
+        @keyframes fadeInOut { 0%, 100% { opacity: 0; transform: translateY(5px); } 10%, 90% { opacity: 1; transform: translateY(0); } }
 
-        /* Glassmorphism */
-        .glass-panel {
-            background: rgba(21, 25, 35, 0.85);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
+        .glass-panel { background: rgba(21, 25, 35, 0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
+
+        /* FIX 2: Connection status indicator styles */
+        .status-connecting { color: #f59e0b; }
+        .status-connected  { color: #10b981; }
+        .status-error      { color: #ef4444; }
+
+        /* Retry button pulse */
+        @keyframes pulse-border { 0%, 100% { box-shadow: 0 0 0 0 rgba(99,102,241,0.4); } 50% { box-shadow: 0 0 0 6px rgba(99,102,241,0); } }
+        .pulse-btn { animation: pulse-border 1.5s infinite; }
     </style>
 </head>
 <body class="h-screen w-screen relative flex flex-col">
 
-    <!-- Toast Container -->
     <div id="toast-container" class="fixed top-20 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 pointer-events-none w-max max-w-[90%]"></div>
 
     <!-- Settings Modal -->
@@ -87,7 +58,6 @@
                 <button onclick="toggleSettings()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
             </div>
             <div class="space-y-6">
-                <!-- Profile Customization -->
                 <div>
                     <label class="block text-xs font-bold text-slate-500 uppercase mb-3">Profile</label>
                     <div class="flex items-center gap-4 mb-4">
@@ -97,8 +67,6 @@
                             <div class="text-[10px] text-slate-500">Pick an avatar below:</div>
                         </div>
                     </div>
-                    
-                    <!-- Modal Avatar Picker -->
                     <div class="grid grid-cols-5 gap-2 p-2 bg-slate-800/50 rounded-xl border border-slate-700/50">
                         <button onclick="selectModalAvatar('👾', 'bg-indigo-600')" class="h-10 w-10 rounded-full bg-indigo-600 flex items-center justify-center hover:scale-110 transition mx-auto text-lg">👾</button>
                         <button onclick="selectModalAvatar('🐱', 'bg-purple-600')" class="h-10 w-10 rounded-full bg-purple-600 flex items-center justify-center hover:scale-110 transition mx-auto text-lg">🐱</button>
@@ -106,13 +74,10 @@
                         <button onclick="selectModalAvatar('🦊', 'bg-orange-600')" class="h-10 w-10 rounded-full bg-orange-600 flex items-center justify-center hover:scale-110 transition mx-auto text-lg">🦊</button>
                         <button onclick="selectModalAvatar('👻', 'bg-pink-600')" class="h-10 w-10 rounded-full bg-pink-600 flex items-center justify-center hover:scale-110 transition mx-auto text-lg">👻</button>
                     </div>
-                    
-                    <!-- Hidden fields for modal state -->
                     <input type="hidden" id="modal-selected-avatar">
                     <input type="hidden" id="modal-selected-color">
                 </div>
                 
-                <!-- Host Controls -->
                 <div id="host-settings-group" class="hidden space-y-4 pt-4 border-t border-slate-800">
                     <div class="p-3 bg-slate-800/50 rounded-lg border border-slate-700">
                         <label class="block text-xs font-bold text-slate-500 uppercase mb-3">Room Security</label>
@@ -131,7 +96,6 @@
                     </div>
                 </div>
 
-                <!-- AI Key -->
                 <div class="pt-2">
                     <label class="block text-xs font-bold text-slate-500 uppercase mb-2">AI Integration</label>
                     <div class="relative">
@@ -142,7 +106,7 @@
 
                 <button onclick="saveSettings()" class="w-full bg-indigo-600 hover:bg-indigo-500 py-3 rounded-lg font-bold text-sm shadow-lg transition-colors">Save Changes</button>
                 <div class="pt-4 border-t border-slate-700 text-center">
-                    <p class="text-[10px] text-slate-500">NearWatch v2.0 • P2P Encrypted</p>
+                    <p class="text-[10px] text-slate-500">NearWatch v2.1 • P2P Encrypted</p>
                     <p class="text-[10px] text-slate-600 font-medium mt-1">Copyright © Efrat Al Ahad</p>
                 </div>
             </div>
@@ -165,7 +129,6 @@
                 </div>
             </div>
 
-            <!-- Avatar Selector -->
             <div class="flex justify-center gap-4 mb-8">
                 <div class="avatar-option w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-lg border-2 border-transparent shadow-lg" onclick="selectAvatar('👾', 'bg-indigo-600')">👾</div>
                 <div class="avatar-option w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center text-lg border-2 border-transparent shadow-lg" onclick="selectAvatar('🐱', 'bg-purple-600')">🐱</div>
@@ -174,7 +137,6 @@
             </div>
 
             <div class="space-y-6">
-                <!-- Name Input -->
                 <div class="space-y-1.5">
                     <div class="relative group">
                         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -184,13 +146,11 @@
                     </div>
                 </div>
                 
-                <!-- Create/Join Toggle -->
                 <div class="grid grid-cols-2 gap-1 p-1 bg-[#0f1218] rounded-xl border border-slate-800">
                     <button onclick="switchMode('create')" id="btn-mode-create" class="py-2 text-xs font-bold rounded-lg transition-all bg-indigo-600 text-white shadow-lg">Create Room</button>
                     <button onclick="switchMode('join')" id="btn-mode-join" class="py-2 text-xs font-bold rounded-lg transition-all text-slate-400 hover:text-white">Join Room</button>
                 </div>
 
-                <!-- Create Room Input -->
                 <div id="create-input-group" class="space-y-1.5 relative">
                     <div class="relative group">
                         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -204,7 +164,6 @@
                     <p class="text-[10px] text-slate-500 pl-1 mt-1">Leave blank for random ID.</p>
                 </div>
 
-                <!-- Join Room Input -->
                 <div id="join-input-group" class="hidden space-y-1.5 relative">
                     <div class="relative group">
                         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -217,6 +176,12 @@
                 <button onclick="handleStart()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl shadow-lg transition transform active:scale-[0.98] text-sm uppercase tracking-wide flex items-center justify-center gap-2" id="action-btn">
                     Create Room
                 </button>
+
+                <!-- FIX 3: Retry button (hidden by default) -->
+                <button onclick="handleStart()" id="retry-btn" class="hidden w-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white font-bold py-2.5 rounded-xl transition text-sm flex items-center justify-center gap-2 pulse-btn">
+                    <i data-lucide="refresh-cw" class="w-4 h-4"></i> Retry Connection
+                </button>
+
                 <p id="status-msg" class="text-center text-xs text-slate-400 h-4"></p>
             </div>
         </div>
@@ -224,7 +189,6 @@
 
     <!-- App View -->
     <div id="app-view" class="flex flex-col h-full hidden bg-[#0b0e14]">
-        <!-- Header -->
         <header class="h-14 border-b border-slate-800 flex items-center justify-between px-4 z-20 shrink-0 bg-[#0b0e14]">
             <div class="flex items-center gap-3">
                 <div class="bg-indigo-600 p-1.5 rounded-lg">
@@ -235,7 +199,6 @@
                 </div>
             </div>
             
-            <!-- Room Info & Status -->
             <div class="flex items-center gap-2 bg-[#151923] border border-slate-800 rounded-full px-3 py-1">
                 <span id="sync-dot" class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                 <p class="text-[10px] text-slate-400 cursor-pointer hover:text-indigo-400 transition flex items-center gap-2" onclick="copyId()">
@@ -258,9 +221,7 @@
         </header>
 
         <main class="flex-1 flex overflow-hidden relative">
-            <!-- Left: Video & Controls -->
             <div class="flex-1 flex flex-col bg-black relative w-full h-full">
-                <!-- Floating Source Input -->
                 <div class="absolute top-4 left-1/2 -translate-x-1/2 w-[95%] max-w-2xl z-20 opacity-0 hover:opacity-100 transition duration-300">
                     <div class="flex flex-wrap justify-center gap-2 bg-[#151923]/90 backdrop-blur p-1.5 rounded-xl border border-slate-700 shadow-2xl">
                         <div class="flex items-center flex-1 min-w-[150px] gap-2">
@@ -275,7 +236,6 @@
                     </div>
                 </div>
 
-                <!-- Video Stage -->
                 <div class="flex-1 overflow-hidden bg-[#000] flex flex-col justify-center items-center">
                     <div class="video-wrapper">
                         <div id="video-box" class="video-container">
@@ -292,16 +252,12 @@
                     </div>
                 </div>
 
-                <!-- Bottom Controls Bar -->
                 <div class="w-full bg-[#151923] border-t border-slate-800 px-4 py-3 flex items-center justify-between shrink-0 z-20">
                     <div class="flex items-center gap-4">
-                        <!-- Rewind/Forward -->
                         <div class="flex gap-2">
                             <button onclick="seekRelative(-10)" class="text-slate-400 hover:text-white transition" title="-10s"><i data-lucide="rotate-ccw" class="w-5 h-5"></i></button>
                             <button onclick="seekRelative(10)" class="text-slate-400 hover:text-white transition" title="+10s"><i data-lucide="rotate-cw" class="w-5 h-5"></i></button>
                         </div>
-
-                        <!-- Speed -->
                         <div class="relative group">
                             <select id="speed-select" onchange="changeSpeed(this.value)" class="bg-[#0b0e14] text-slate-300 text-xs border border-slate-700 rounded px-2 py-1 focus:border-indigo-500 outline-none appearance-none pr-6 cursor-pointer">
                                 <option value="0.5">0.5x</option>
@@ -312,43 +268,32 @@
                             </select>
                             <i data-lucide="chevron-down" class="w-3 h-3 text-slate-500 absolute right-1.5 top-1.5 pointer-events-none"></i>
                         </div>
-
-                        <!-- Subtitles -->
                         <button onclick="document.getElementById('sub-input').click()" class="text-slate-400 hover:text-white transition" title="Subtitles"><i data-lucide="captions" class="w-5 h-5"></i></button>
                         <input type="file" id="sub-input" accept=".vtt,.srt" class="hidden" onchange="handleSubtitle(this)">
                     </div>
-
-                    <!-- Quote Ticker -->
                     <div id="quote-container" class="hidden md:flex flex-1 justify-center items-center overflow-hidden mx-4">
                         <p id="quote-text" class="text-xs text-slate-500 italic truncate max-w-[400px] quote-fade text-center font-medium">Watch together. No limits.</p>
                     </div>
-
-                    <!-- Right Controls -->
                     <div class="flex items-center gap-3">
                         <button onclick="toggleFullscreen()" class="text-slate-400 hover:text-white transition"><i data-lucide="maximize" class="w-5 h-5"></i></button>
                     </div>
                 </div>
             </div>
 
-            <!-- Right: Chat & Sidebar (Responsive) -->
             <div id="chat-sidebar" class="fixed inset-y-0 right-0 z-30 w-80 bg-[#151923] border-l border-slate-800 flex flex-col transition-transform duration-300 transform translate-x-full lg:translate-x-0 lg:static">
-                <!-- Mobile Close Button -->
                 <button onclick="toggleMobileChat()" class="lg:hidden absolute top-3 right-3 p-2 text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
                 
-                <!-- Sidebar Tabs -->
                 <div class="flex border-b border-slate-800 mt-10 lg:mt-0">
                     <button onclick="switchTab('chat')" id="tab-chat" class="tab-btn active w-1/2">Chat</button>
                     <button onclick="switchTab('users')" id="tab-users" class="tab-btn inactive w-1/2 flex items-center justify-center gap-1">Users <span id="user-count" class="text-[9px] bg-slate-800 px-1.5 py-0.5 rounded-full text-slate-400">1</span></button>
                 </div>
                 
-                <!-- Chat View -->
                 <div id="view-chat" class="flex-1 flex flex-col overflow-hidden bg-[#0b0e14]">
                     <div id="chat-container" class="flex-1 overflow-y-auto p-4 space-y-3">
                         <div class="text-center text-[10px] text-slate-600 my-4 uppercase tracking-widest font-bold">Room Created</div>
                     </div>
-                    <!-- Chat Interactions -->
                     <div class="p-3 bg-[#151923] border-t border-slate-800 relative">
-                        <div class="flex gap-2 mb-3 overflow-x-auto no-scrollbar pb-1">
+                        <div class="flex gap-2 mb-3 overflow-x-auto pb-1">
                             <button onclick="sendEmoji('👋')" class="text-xl hover:scale-110 transition">👋</button>
                             <button onclick="sendEmoji('😂')" class="text-xl hover:scale-110 transition">😂</button>
                             <button onclick="sendEmoji('🔥')" class="text-xl hover:scale-110 transition">🔥</button>
@@ -364,7 +309,6 @@
                     </div>
                 </div>
 
-                <!-- Users View -->
                 <div id="view-users" class="flex-1 hidden overflow-y-auto p-4 bg-[#0b0e14]">
                     <h3 class="text-xs font-bold text-slate-500 uppercase mb-4 tracking-widest">Participants</h3>
                     <div id="user-list-container" class="space-y-2"></div>
@@ -374,40 +318,65 @@
     </div>
 
     <script>
-        // --- CONFIG & STATE ---
+        // ============================================================
+        //  CONFIG & STATE
+        // ============================================================
         const generateId = () => Math.random().toString(36).substring(2, 8);
+
+        // FIX 4: Multiple PeerJS server configs to try in order
+        const PEER_CONFIGS = [
+            // Option A: PeerJS cloud (primary)
+            {},
+            // Option B: Metered.ca free TURN (fallback)
+            {
+                host: '0.peerjs.com',
+                port: 443,
+                path: '/',
+                secure: true,
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' },
+                    ]
+                }
+            }
+        ];
+        let currentConfigIndex = 0;
+
         let peer;
-        let connections = []; // For Host
-        let hostConn = null;  // For Guest
-        let isSyncing = false; // Lock to prevent loop
-        let apiKey = ""; // AI Key
+        let connections = [];
+        let hostConn = null;
+        let isSyncing = false;
+        let apiKey = "";
         let connTimeout = null;
+        let retryCount = 0;
+        const MAX_RETRIES = 2;
         let userList = [];
+
         const quotes = [
-            "Watch together. No lag. No limits.", "Tonight, we’re not alone.", "Turn loneliness into togetherness.", 
-            "Distance shouldn’t pause the movie.", "Press play. Feel close.", "Together, even miles apart.", 
+            "Watch together. No lag. No limits.", "Tonight, we're not alone.", "Turn loneliness into togetherness.",
+            "Distance shouldn't pause the movie.", "Press play. Feel close.", "Together, even miles apart.",
             "Same screen. Same moment.", "Turn distance into togetherness."
         ];
-        
-        // Sound Effect
+
+        // Audio
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         function playNotificationSound() {
-            if(audioCtx.state === 'suspended') audioCtx.resume();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
+            osc.connect(gain); gain.connect(audioCtx.destination);
             osc.type = 'sine';
             osc.frequency.setValueAtTime(500, audioCtx.currentTime);
             osc.frequency.exponentialRampToValueAtTime(1000, audioCtx.currentTime + 0.1);
             gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
             gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
-            osc.start();
-            osc.stop(audioCtx.currentTime + 0.1);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.1);
         }
 
         const state = {
-            mode: 'create', // create | join
+            mode: 'create',
             id: null,
             username: 'Guest',
             avatar: '👾',
@@ -415,19 +384,22 @@
             hostOnly: false,
             isLocked: false,
             maxUsers: 10,
-            isCoHost: false, 
+            isCoHost: false,
             video: { type: null, src: null, time: 0, state: 'paused', speed: 1.0 },
-            ytPlayer: null
+            ytPlayer: null,
+            targetHostId: null  // FIX 5: store target for retry
         };
 
-        // --- INIT ---
+        // ============================================================
+        //  INIT
+        // ============================================================
         window.onload = () => {
             lucide.createIcons();
             loadProfile();
             startQuoteTicker();
-            
+
             const urlParams = new URLSearchParams(window.location.search);
-            if(urlParams.get('join')) {
+            if (urlParams.get('join')) {
                 switchMode('join');
                 document.getElementById('join-id-input').value = urlParams.get('join');
             }
@@ -438,9 +410,9 @@
             setInterval(() => {
                 idx = (idx + 1) % quotes.length;
                 const el = document.getElementById('quote-text');
-                if(el) {
+                if (el) {
                     el.classList.remove('quote-fade');
-                    void el.offsetWidth; // reflow
+                    void el.offsetWidth;
                     el.innerText = quotes[idx];
                     el.classList.add('quote-fade');
                 }
@@ -449,109 +421,94 @@
 
         function loadProfile() {
             const saved = localStorage.getItem('zg_p2p_profile');
-            if(saved) {
+            if (saved) {
                 const p = JSON.parse(saved);
                 document.getElementById('username-input').value = p.name;
                 document.getElementById('modal-username').value = p.name;
-                selectAvatar(p.avatar, p.color, true); // Update login avatar
-                selectModalAvatar(p.avatar, p.color); // Update modal avatar preview
+                selectAvatar(p.avatar, p.color, true);
+                selectModalAvatar(p.avatar, p.color);
                 apiKey = p.apiKey || "";
                 document.getElementById('ai-api-key').value = apiKey;
             } else {
-                // Default selection
                 selectAvatar('👾', 'bg-indigo-600', true);
                 selectModalAvatar('👾', 'bg-indigo-600');
             }
         }
 
-        // --- LOGIN LOGIC ---
+        // ============================================================
+        //  LOGIN LOGIC
+        // ============================================================
         function switchMode(mode) {
             state.mode = mode;
             const btnCreate = document.getElementById('btn-mode-create');
-            const btnJoin = document.getElementById('btn-mode-join');
+            const btnJoin   = document.getElementById('btn-mode-join');
             const actionBtn = document.getElementById('action-btn');
-            const createGroup = document.getElementById('create-input-group');
-            const joinGroup = document.getElementById('join-input-group');
 
-            if(mode === 'create') {
+            if (mode === 'create') {
                 btnCreate.className = "py-2 text-xs font-bold rounded-lg transition-all bg-indigo-600 text-white shadow-lg";
-                btnJoin.className = "py-2 text-xs font-bold rounded-lg transition-all text-slate-400 hover:text-white hover:bg-slate-800";
-                
+                btnJoin.className   = "py-2 text-xs font-bold rounded-lg transition-all text-slate-400 hover:text-white hover:bg-slate-800";
                 actionBtn.innerText = "Create Room";
-                createGroup.classList.remove('hidden');
-                joinGroup.classList.add('hidden');
+                document.getElementById('create-input-group').classList.remove('hidden');
+                document.getElementById('join-input-group').classList.add('hidden');
             } else {
-                btnJoin.className = "py-2 text-xs font-bold rounded-lg transition-all bg-indigo-600 text-white shadow-lg";
+                btnJoin.className   = "py-2 text-xs font-bold rounded-lg transition-all bg-indigo-600 text-white shadow-lg";
                 btnCreate.className = "py-2 text-xs font-bold rounded-lg transition-all text-slate-400 hover:text-white hover:bg-slate-800";
-
                 actionBtn.innerText = "Join Room";
-                createGroup.classList.add('hidden');
-                joinGroup.classList.remove('hidden');
+                document.getElementById('create-input-group').classList.add('hidden');
+                document.getElementById('join-input-group').classList.remove('hidden');
             }
             lucide.createIcons();
         }
 
-        function fillRandomId() {
-            document.getElementById('create-id-input').value = generateId();
-        }
+        function fillRandomId() { document.getElementById('create-id-input').value = generateId(); }
 
         function selectAvatar(av, col, isLogin = false) {
-            if(isLogin) {
+            if (isLogin) {
                 state.avatar = av; state.color = col;
-                // Update login screen visual
                 document.querySelectorAll('.avatar-option').forEach(el => el.classList.remove('selected'));
-                // Basic matching for demo purposes
-                const options = document.querySelectorAll('.avatar-option');
-                for(let opt of options) {
-                    if(opt.innerText === av) opt.classList.add('selected');
-                }
+                document.querySelectorAll('.avatar-option').forEach(opt => { if (opt.innerText === av) opt.classList.add('selected'); });
             }
         }
 
         function selectModalAvatar(av, col) {
-            // Update state
             state.avatar = av; state.color = col;
-            
-            // Update Modal UI
             const preview = document.getElementById('modal-avatar-preview');
             preview.innerText = av;
             preview.className = `w-16 h-16 rounded-full flex items-center justify-center text-3xl shadow-lg border-2 border-slate-700 transition-all ${col}`;
-            
-            // Store temporarily in hidden fields if we want cancel logic, 
-            // but for this simple version we update state directly.
         }
 
         async function handleStart() {
             const name = document.getElementById('username-input').value.trim();
-            if(!name) return toast("Please enter a name", "error");
+            if (!name) return toast("Please enter a name", "error");
             state.username = name;
-            
-            localStorage.setItem('zg_p2p_profile', JSON.stringify({
-                name, avatar: state.avatar, color: state.color, apiKey
-            }));
+
+            localStorage.setItem('zg_p2p_profile', JSON.stringify({ name, avatar: state.avatar, color: state.color, apiKey }));
 
             const btn = document.getElementById('action-btn');
             btn.disabled = true;
             btn.innerText = "Connecting...";
-            document.getElementById('status-msg').innerText = "Establishing Secure Connection...";
+            document.getElementById('retry-btn').classList.add('hidden');
+            setStatus("Establishing Secure Connection...");
 
-            // Destroy existing peer if any
-            if (peer) { peer.destroy(); peer = null; }
+            if (peer) { try { peer.destroy(); } catch(e){} peer = null; }
 
-            if(state.mode === 'create') {
-                const inputId = document.getElementById('create-id-input').value.trim().replace(/[^a-zA-Z0-9-_]/g, '').toLowerCase();
+            if (state.mode === 'create') {
+                // FIX 6: sanitize but preserve case for host ID
+                const inputId = document.getElementById('create-id-input').value.trim().replace(/[^a-zA-Z0-9-_]/g, '');
                 state.id = inputId || generateId();
                 state.hostOnly = false;
                 state.isLocked = false;
-                state.isCoHost = true; 
-                initPeer(state.id);
+                state.isCoHost = true;
+                state.targetHostId = null;
+                currentConfigIndex = 0;
+                initPeer(state.id, null);
             } else {
-                const inputId = document.getElementById('join-id-input').value.trim().replace(/[^a-zA-Z0-9-_]/g, '').toLowerCase();
-                if(!inputId) {
-                    resetLoginUI("Enter a Host ID to join.");
-                    return;
-                }
-                state.id = generateId(); 
+                const inputId = document.getElementById('join-id-input').value.trim().replace(/[^a-zA-Z0-9-_]/g, '');
+                if (!inputId) { resetLoginUI("Enter a Host ID to join."); return; }
+                state.id = generateId();
+                state.targetHostId = inputId;  // store for retry
+                currentConfigIndex = 0;
+                retryCount = 0;
                 initPeer(state.id, inputId);
             }
         }
@@ -560,23 +517,57 @@
             const btn = document.getElementById('action-btn');
             btn.disabled = false;
             btn.innerText = state.mode === 'create' ? "Create Room" : "Join Room";
-            document.getElementById('status-msg').innerText = "";
-            if(msg) toast(msg, "error");
+            setStatus("");
+            if (msg) {
+                toast(msg, "error");
+                // FIX 7: Show retry button on failure
+                document.getElementById('retry-btn').classList.remove('hidden');
+                lucide.createIcons();
+            }
         }
 
-        // --- PEERJS LOGIC ---
+        function setStatus(msg, type = 'neutral') {
+            const el = document.getElementById('status-msg');
+            el.innerText = msg;
+            el.className = `text-center text-xs h-4 ${type === 'error' ? 'text-red-400' : type === 'success' ? 'text-emerald-400' : 'text-slate-400'}`;
+        }
+
+        // ============================================================
+        //  PEERJS — CORE FIX
+        // ============================================================
+        function buildPeerConfig(configIdx) {
+            // Try each config in sequence on failure
+            return PEER_CONFIGS[configIdx] || PEER_CONFIGS[0];
+        }
+
         function initPeer(myId, targetHostId = null) {
-            const cleanId = myId.replace(/[^a-zA-Z0-9-_]/g, '');
-            peer = new Peer(cleanId, { debug: 1 });
+            const config = buildPeerConfig(currentConfigIndex);
+            setStatus(`Connecting to server... (attempt ${retryCount + 1})`);
+
+            try {
+                peer = new Peer(myId, { ...config, debug: 1 });
+            } catch (e) {
+                handleConnectionFailure(myId, targetHostId, "Failed to create peer.");
+                return;
+            }
+
+            // FIX 8: Overall peer open timeout (server unreachable)
+            const serverTimeout = setTimeout(() => {
+                if (peer && !peer.open) {
+                    handleConnectionFailure(myId, targetHostId, "Server unreachable. Retrying...");
+                }
+            }, 8000);
 
             peer.on('open', (id) => {
-                if(targetHostId) {
+                clearTimeout(serverTimeout);
+                setStatus("Server connected ✓", 'success');
+
+                if (targetHostId) {
                     connectToHost(targetHostId);
                 } else {
                     enterApp(id);
-                    // setStatus("Hosting", "bg-indigo-500");
                     document.getElementById('host-settings-group').classList.remove('hidden');
-                    userList = [{ id: id, username: state.username, avatar: state.avatar, color: state.color, isCoHost: true }];
+                    userList = [{ id, username: state.username, avatar: state.avatar, color: state.color, isCoHost: true }];
                     updateUserListUI();
                 }
             });
@@ -594,67 +585,114 @@
                 }
                 connections.push(conn);
                 setupConnection(conn);
-                if(state.mode === 'create') {
+                if (state.mode === 'create') {
                     setTimeout(() => {
-                        if(conn.open) {
+                        if (conn.open) {
                             conn.send({ type: 'sync-full', video: state.video, hostOnly: state.hostOnly, isLocked: state.isLocked });
-                            broadcastUserList(); 
+                            broadcastUserList();
                         }
                     }, 1000);
                 }
             });
 
             peer.on('error', (err) => {
-                console.error(err);
+                clearTimeout(serverTimeout);
                 clearTimeout(connTimeout);
-                let msg = "Connection Error";
-                if(err.type === 'unavailable-id') msg = "ID taken. Try another.";
-                if(err.type === 'peer-unavailable') msg = "Host not found.";
-                toast(msg, "error");
-                resetLoginUI(msg);
+                console.error('PeerJS error:', err.type, err);
+
+                if (err.type === 'unavailable-id') {
+                    resetLoginUI("Room ID taken. Try another.");
+                    return;
+                }
+                if (err.type === 'peer-unavailable') {
+                    // FIX 9: Retry connecting to host before giving up
+                    if (retryCount < MAX_RETRIES) {
+                        retryCount++;
+                        setStatus(`Host not found. Retrying (${retryCount}/${MAX_RETRIES})...`);
+                        setTimeout(() => connectToHost(targetHostId || state.targetHostId), 2000);
+                    } else {
+                        resetLoginUI("Host not found. Check the Room ID.");
+                    }
+                    return;
+                }
+                // For other errors, try next server config
+                handleConnectionFailure(myId, targetHostId, `Connection error: ${err.type}`);
             });
         }
 
+        // FIX 10: Escalate through server configs on failure
+        function handleConnectionFailure(myId, targetHostId, reason) {
+            if (peer) { try { peer.destroy(); } catch(e){} peer = null; }
+
+            if (currentConfigIndex < PEER_CONFIGS.length - 1) {
+                currentConfigIndex++;
+                setStatus(`${reason} Trying fallback...`);
+                setTimeout(() => initPeer(myId, targetHostId), 1500);
+            } else {
+                resetLoginUI("Cannot connect. Check your internet connection.");
+            }
+        }
+
         function connectToHost(hostId) {
-            hostConn = peer.connect(hostId, {
-                metadata: { username: state.username, avatar: state.avatar, color: state.color },
-                reliable: true // Improved reliability
-            });
-            document.getElementById('status-msg').innerText = "Locating Host...";
-            
-            // Increased timeout to 15 seconds to handle network latency
+            if (!peer || !peer.open) return;
+
+            setStatus("Locating Host...");
+            clearTimeout(connTimeout);
+
+            try {
+                hostConn = peer.connect(hostId, {
+                    metadata: { username: state.username, avatar: state.avatar, color: state.color },
+                    reliable: true
+                });
+            } catch (e) {
+                resetLoginUI("Failed to connect to host.");
+                return;
+            }
+
+            // FIX 11: 12-second timeout with helpful message
             connTimeout = setTimeout(() => {
-                if(!hostConn || !hostConn.open) {
-                    resetLoginUI("Connection timed out. Is Host online?");
-                    if(peer) {
-                        peer.destroy();
-                        peer = null;
+                if (!hostConn || !hostConn.open) {
+                    if (retryCount < MAX_RETRIES) {
+                        retryCount++;
+                        setStatus(`Timeout. Retrying (${retryCount}/${MAX_RETRIES})...`);
+                        try { if (hostConn) hostConn.close(); } catch(e){}
+                        setTimeout(() => connectToHost(hostId), 1000);
+                    } else {
+                        try { if (hostConn) hostConn.close(); } catch(e){}
+                        resetLoginUI("Timed out. Is Host online?");
                     }
                 }
-            }, 15000);
+            }, 12000);
 
             hostConn.on('open', () => {
                 clearTimeout(connTimeout);
+                retryCount = 0;
                 enterApp(hostId);
-                // setStatus("Connected", "bg-emerald-500"); // Removed to use header UI
                 addSystemMsg("Joined Room!");
                 setupConnection(hostConn);
                 document.getElementById('my-peer-id').innerText = hostId;
             });
-            
+
             hostConn.on('close', () => {
                 toast("Host Disconnected", "error");
                 setTimeout(() => location.reload(), 2000);
             });
-            
+
             hostConn.on('error', (e) => {
                 clearTimeout(connTimeout);
-                resetLoginUI("Could not connect to Host.");
+                console.error('hostConn error:', e);
+                if (retryCount < MAX_RETRIES) {
+                    retryCount++;
+                    setStatus(`Error. Retrying (${retryCount}/${MAX_RETRIES})...`);
+                    setTimeout(() => connectToHost(hostId), 1500);
+                } else {
+                    resetLoginUI("Could not connect to Host.");
+                }
             });
         }
 
         function setupConnection(conn) {
-            if(state.mode === 'create' && conn.metadata) {
+            if (state.mode === 'create' && conn.metadata) {
                 const { username, avatar, color } = conn.metadata;
                 userList.push({ id: conn.peer, username, avatar, color, isCoHost: false });
                 broadcastUserList();
@@ -665,10 +703,10 @@
             }
             conn.on('data', (data) => handleData(data, conn));
             conn.on('close', () => {
-                if(state.mode === 'create') {
+                if (state.mode === 'create') {
                     connections = connections.filter(c => c !== conn);
                     const userIdx = userList.findIndex(u => u.id === conn.peer);
-                    if(userIdx !== -1) {
+                    if (userIdx !== -1) {
                         const user = userList[userIdx];
                         userList.splice(userIdx, 1);
                         broadcastUserList();
@@ -683,7 +721,7 @@
         function enterApp(id) {
             document.getElementById('login-view').classList.add('hidden');
             document.getElementById('app-view').classList.remove('hidden');
-            if(state.mode === 'create') document.getElementById('my-peer-id').innerText = id;
+            if (state.mode === 'create') document.getElementById('my-peer-id').innerText = id;
             updateProfileUI();
             initYouTube();
         }
@@ -694,19 +732,20 @@
             el.className = `w-9 h-9 rounded-full ${state.color} flex items-center justify-center font-bold text-sm shadow-inner cursor-pointer`;
         }
 
-        // --- USER LIST ---
+        // ============================================================
+        //  USER LIST
+        // ============================================================
         function broadcastUserList() { broadcast({ type: 'user-list', list: userList }); updateUserListUI(); }
         function updateUserListUI() {
             const container = document.getElementById('user-list-container');
             document.getElementById('user-count').innerText = userList.length;
             container.innerHTML = '';
             userList.forEach(user => {
-                const isMe = user.id === (state.mode === 'create' ? state.id : peer.id);
+                const isMe = user.id === (state.mode === 'create' ? state.id : peer?.id);
                 const role = user.isCoHost ? (user.id === state.id && state.mode === 'create' ? 'HOST' : 'CO-HOST') : 'USER';
                 const roleColor = user.isCoHost ? 'text-indigo-400' : 'text-slate-500';
-                
                 let controls = '';
-                if(state.mode === 'create' && !isMe) {
+                if (state.mode === 'create' && !isMe) {
                     controls = `<div class="flex gap-2 opacity-0 group-hover:opacity-100 transition"><button onclick="promoteUser('${user.id}')" title="Promote" class="text-indigo-400 hover:text-white"><i data-lucide="shield-plus" class="w-4 h-4"></i></button><button onclick="kickUser('${user.id}')" title="Kick" class="text-red-400 hover:text-white"><i data-lucide="user-x" class="w-4 h-4"></i></button></div>`;
                 }
                 const div = document.createElement('div');
@@ -718,159 +757,156 @@
         }
 
         function kickUser(userId) {
-            if(state.mode !== 'create') return;
+            if (state.mode !== 'create') return;
             const conn = connections.find(c => c.peer === userId);
-            if(conn) { conn.send({ type: 'error', msg: "Kicked by Host." }); setTimeout(() => conn.close(), 500); }
+            if (conn) { conn.send({ type: 'error', msg: "Kicked by Host." }); setTimeout(() => conn.close(), 500); }
         }
         function promoteUser(userId) {
-            if(state.mode !== 'create') return;
+            if (state.mode !== 'create') return;
             const user = userList.find(u => u.id === userId);
-            if(user) {
-                user.isCoHost = !user.isCoHost; 
-                broadcastUserList(); 
+            if (user) {
+                user.isCoHost = !user.isCoHost;
+                broadcastUserList();
                 const conn = connections.find(c => c.peer === userId);
-                if(conn) conn.send({ type: 'promote', val: user.isCoHost });
+                if (conn) conn.send({ type: 'promote', val: user.isCoHost });
                 toast(`Updated ${user.username}`, 'success');
             }
         }
 
-        // --- CORE DATA HANDLING ---
+        // ============================================================
+        //  DATA HANDLING
+        // ============================================================
         function handleData(data, senderConn) {
             if (data.type === 'error') { alert(data.msg); location.reload(); return; }
             if (data.type === 'chat') {
                 addChat(data.user, data.msg, data.avatar, data.color);
                 playNotificationSound();
-                if(document.getElementById('chat-sidebar').classList.contains('closed')) document.getElementById('chat-badge').classList.remove('hidden');
-                if(state.mode === 'create') broadcast(data, senderConn);
-            }
-            else if (data.type === 'system') {
+                if (document.getElementById('chat-sidebar').classList.contains('translate-x-full')) document.getElementById('chat-badge').classList.remove('hidden');
+                if (state.mode === 'create') broadcast(data, senderConn);
+            } else if (data.type === 'system') {
                 addSystemMsg(data.msg);
-                if(state.mode === 'create') broadcast(data, senderConn);
-            }
-            else if (data.type === 'video-action') {
-                if(state.mode === 'create' && state.hostOnly && !data.isHost) return;
+                if (state.mode === 'create') broadcast(data, senderConn);
+            } else if (data.type === 'video-action') {
+                if (state.mode === 'create' && state.hostOnly && !data.isHost) return;
                 applyVideoAction(data.action, data.val);
-                if(state.mode === 'create') broadcast(data, senderConn);
-            }
-            else if (data.type === 'sync-full') {
+                if (state.mode === 'create') broadcast(data, senderConn);
+            } else if (data.type === 'sync-full') {
                 state.hostOnly = data.hostOnly;
                 updateLockUI(data.isLocked);
-                if(data.video.type === 'youtube') {
+                if (data.video.type === 'youtube') {
                     document.getElementById('url-input').value = `https://youtu.be/${data.video.src}`;
                     state.video = data.video;
                     loadVideo(true);
-                } else if(data.video.type === 'file') {
+                } else if (data.video.type === 'file') {
                     addSystemMsg("Host is watching a local file. Please load same file.");
                 }
-                if(data.video.speed) changeSpeed(data.video.speed, true);
-            }
-            else if (data.type === 'settings') {
-                if(data.key === 'hostOnly') state.hostOnly = data.val;
-                if(data.key === 'isLocked') updateLockUI(data.val);
-            }
-            else if (data.type === 'user-list') { userList = data.list; updateUserListUI(); }
-            else if (data.type === 'promote') { state.isCoHost = data.val; toast(state.isCoHost ? "You are now Co-Host" : "Co-Host removed", "info"); }
-            else if (data.type === 'update-profile') {
+                if (data.video.speed) changeSpeed(data.video.speed, true);
+            } else if (data.type === 'settings') {
+                if (data.key === 'hostOnly') state.hostOnly = data.val;
+                if (data.key === 'isLocked') updateLockUI(data.val);
+            } else if (data.type === 'user-list') {
+                userList = data.list; updateUserListUI();
+            } else if (data.type === 'promote') {
+                state.isCoHost = data.val;
+                toast(state.isCoHost ? "You are now Co-Host" : "Co-Host removed", "info");
+            } else if (data.type === 'update-profile') {
                 if (state.mode === 'create') {
                     const u = userList.find(u => u.id === senderConn.peer);
-                    if (u) {
-                        u.username = data.username; u.avatar = data.avatar; u.color = data.color;
-                        broadcastUserList();
-                    }
+                    if (u) { u.username = data.username; u.avatar = data.avatar; u.color = data.color; broadcastUserList(); }
                 }
             }
         }
 
         function broadcast(data, excludeConn = null) {
-            connections.forEach(c => { if(c !== excludeConn && c.open) c.send(data); });
+            connections.forEach(c => { if (c !== excludeConn && c.open) c.send(data); });
         }
 
-        // --- VIDEO LOGIC ---
+        // ============================================================
+        //  VIDEO LOGIC
+        // ============================================================
         function initYouTube() {
-            if(!window.YT) { const tag = document.createElement('script'); tag.src = "https://www.youtube.com/iframe_api"; document.body.appendChild(tag); }
+            if (!window.YT) { const tag = document.createElement('script'); tag.src = "https://www.youtube.com/iframe_api"; document.body.appendChild(tag); }
         }
         function loadVideo(isRemote = false) {
             const url = document.getElementById('url-input').value;
             const ytId = extractYouTubeId(url);
-            if(ytId) {
+            if (ytId) {
                 state.video.type = 'youtube'; state.video.src = ytId;
                 activatePlayer('youtube');
-                if(!state.ytPlayer) {
+                if (!state.ytPlayer) {
                     state.ytPlayer = new YT.Player('youtube-player', {
                         height: '100%', width: '100%', videoId: ytId,
                         playerVars: { autoplay: 1, controls: 0, rel: 0 },
                         events: { onStateChange: onPlayerStateChange }
                     });
                 } else { state.ytPlayer.loadVideoById(ytId); }
-                if(!isRemote) sendVideoAction('change', { type: 'youtube', src: ytId });
+                if (!isRemote) sendVideoAction('change', { type: 'youtube', src: ytId });
             }
         }
         function handleFile(input) {
-            const file = input.files[0]; if(!file) return;
+            const file = input.files[0]; if (!file) return;
             const url = URL.createObjectURL(file);
-            if(state.ytPlayer && state.ytPlayer.stopVideo) state.ytPlayer.stopVideo();
+            if (state.ytPlayer && state.ytPlayer.stopVideo) state.ytPlayer.stopVideo();
             state.video.type = 'file';
             activatePlayer('html5');
             const v = document.getElementById('html5-player');
             v.src = url; v.playbackRate = state.video.speed;
-            v.onplay = () => sendVideoAction('play', v.currentTime);
+            v.onplay  = () => sendVideoAction('play', v.currentTime);
             v.onpause = () => sendVideoAction('pause', v.currentTime);
             v.onseeked = () => sendVideoAction('seek', v.currentTime);
             toast("Local file loaded.", "success");
-            if(state.mode === 'create') broadcast({ type: 'video-action', action: 'change', val: { type: 'file' }});
+            if (state.mode === 'create') broadcast({ type: 'video-action', action: 'change', val: { type: 'file' } });
             input.value = '';
         }
         function onPlayerStateChange(e) {
-            if(isSyncing) return;
-            if(e.data == YT.PlayerState.PLAYING) sendVideoAction('play', state.ytPlayer.getCurrentTime());
-            if(e.data == YT.PlayerState.PAUSED) sendVideoAction('pause', state.ytPlayer.getCurrentTime());
+            if (isSyncing) return;
+            if (e.data == YT.PlayerState.PLAYING) sendVideoAction('play', state.ytPlayer.getCurrentTime());
+            if (e.data == YT.PlayerState.PAUSED)  sendVideoAction('pause', state.ytPlayer.getCurrentTime());
         }
         function sendVideoAction(action, val) {
-            if(isSyncing) return;
-            if(state.mode !== 'create' && state.hostOnly && !state.isCoHost) { toast("Host Locked Controls", "error"); return; }
+            if (isSyncing) return;
+            if (state.mode !== 'create' && state.hostOnly && !state.isCoHost) { toast("Host Locked Controls", "error"); return; }
             const data = { type: 'video-action', action, val, isHost: state.mode === 'create' || state.isCoHost };
-            if(action === 'play') state.video.state = 'playing';
-            if(action === 'pause') state.video.state = 'paused';
-            if(action === 'seek') state.video.time = val;
-            if(action === 'speed') state.video.speed = val;
-            if(state.mode === 'create') broadcast(data); else if(hostConn && hostConn.open) hostConn.send(data);
+            if (action === 'play')  state.video.state = 'playing';
+            if (action === 'pause') state.video.state = 'paused';
+            if (action === 'seek')  state.video.time = val;
+            if (action === 'speed') state.video.speed = val;
+            if (state.mode === 'create') broadcast(data); else if (hostConn && hostConn.open) hostConn.send(data);
         }
         function applyVideoAction(action, val) {
             isSyncing = true;
             const yt = state.ytPlayer; const h5 = document.getElementById('html5-player');
-            if(action === 'change') {
-                if(val.type === 'youtube') { document.getElementById('url-input').value = `https://youtu.be/${val.src}`; loadVideo(true); }
-                else if(val.type === 'file') { addSystemMsg("Host changed to Local File."); }
-            }
-            else if(action === 'speed') changeSpeed(val, true);
-            else if(state.video.type === 'youtube' && yt && yt.getPlayerState) {
-                if(action === 'play') { if(Math.abs(yt.getCurrentTime() - val) > 1) yt.seekTo(val); yt.playVideo(); }
-                if(action === 'pause') { yt.seekTo(val); yt.pauseVideo(); }
-                if(action === 'seek') yt.seekTo(val);
-            }
-            else if(state.video.type === 'file') {
-                if(action === 'play') { if(Math.abs(h5.currentTime - val) > 1) h5.currentTime = val; h5.play().catch(e=>{}); }
-                if(action === 'pause') { h5.pause(); h5.currentTime = val; }
-                if(action === 'seek') h5.currentTime = val;
+            if (action === 'change') {
+                if (val.type === 'youtube') { document.getElementById('url-input').value = `https://youtu.be/${val.src}`; loadVideo(true); }
+                else if (val.type === 'file') addSystemMsg("Host changed to Local File.");
+            } else if (action === 'speed') {
+                changeSpeed(val, true);
+            } else if (state.video.type === 'youtube' && yt && yt.getPlayerState) {
+                if (action === 'play')  { if (Math.abs(yt.getCurrentTime() - val) > 1) yt.seekTo(val); yt.playVideo(); }
+                if (action === 'pause') { yt.seekTo(val); yt.pauseVideo(); }
+                if (action === 'seek')  yt.seekTo(val);
+            } else if (state.video.type === 'file') {
+                if (action === 'play')  { if (Math.abs(h5.currentTime - val) > 1) h5.currentTime = val; h5.play().catch(e => {}); }
+                if (action === 'pause') { h5.pause(); h5.currentTime = val; }
+                if (action === 'seek')  h5.currentTime = val;
             }
             setTimeout(() => { isSyncing = false; }, 500);
         }
         function seekRelative(seconds) {
-            if(state.mode !== 'create' && state.hostOnly && !state.isCoHost) { toast("Controls Locked", "error"); return; }
+            if (state.mode !== 'create' && state.hostOnly && !state.isCoHost) { toast("Controls Locked", "error"); return; }
             let current = 0;
-            if(state.video.type === 'youtube' && state.ytPlayer) current = state.ytPlayer.getCurrentTime();
-            else if(state.video.type === 'file') current = document.getElementById('html5-player').currentTime;
+            if (state.video.type === 'youtube' && state.ytPlayer) current = state.ytPlayer.getCurrentTime();
+            else if (state.video.type === 'file') current = document.getElementById('html5-player').currentTime;
             const newTime = Math.max(0, current + seconds);
             sendVideoAction('seek', newTime);
-            // Apply locally immediately for responsiveness
-            if(state.video.type === 'youtube') state.ytPlayer.seekTo(newTime);
-            else if(state.video.type === 'file') document.getElementById('html5-player').currentTime = newTime;
+            if (state.video.type === 'youtube') state.ytPlayer.seekTo(newTime);
+            else if (state.video.type === 'file') document.getElementById('html5-player').currentTime = newTime;
         }
         function activatePlayer(type) {
             document.getElementById('placeholder').classList.add('hidden');
             const h5 = document.getElementById('html5-player'); const yt = document.getElementById('youtube-player');
-            if(type === 'youtube') { h5.classList.add('hidden'); h5.pause(); yt.style.display = 'block'; }
-            else { yt.style.display = 'none'; if(state.ytPlayer?.pauseVideo) state.ytPlayer.pauseVideo(); h5.classList.remove('hidden'); }
+            if (type === 'youtube') { h5.classList.add('hidden'); h5.pause(); yt.style.display = 'block'; }
+            else { yt.style.display = 'none'; if (state.ytPlayer?.pauseVideo) state.ytPlayer.pauseVideo(); h5.classList.remove('hidden'); }
         }
         function extractYouTubeId(url) {
             const match = url.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/);
@@ -880,56 +916,58 @@
             const speed = parseFloat(val); state.video.speed = speed;
             document.getElementById('speed-select').value = speed;
             const h5 = document.getElementById('html5-player'); h5.playbackRate = speed;
-            if(state.ytPlayer?.setPlaybackRate) state.ytPlayer.setPlaybackRate(speed);
-            if(!isRemote) sendVideoAction('speed', speed);
+            if (state.ytPlayer?.setPlaybackRate) state.ytPlayer.setPlaybackRate(speed);
+            if (!isRemote) sendVideoAction('speed', speed);
         }
         function handleSubtitle(input) {
-            const file = input.files[0]; if(!file) return;
+            const file = input.files[0]; if (!file) return;
             const reader = new FileReader();
             reader.onload = (e) => {
                 let content = e.target.result;
-                if(file.name.endsWith('.srt')) content = "WEBVTT\n\n" + content.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
-                const blob = new Blob([content], {type: 'text/vtt'});
+                if (file.name.endsWith('.srt')) content = "WEBVTT\n\n" + content.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
+                const blob = new Blob([content], { type: 'text/vtt' });
                 const url = URL.createObjectURL(blob);
                 document.getElementById('player-track').src = url;
-                if(document.getElementById('html5-player').textTracks[0]) document.getElementById('html5-player').textTracks[0].mode = 'showing';
+                if (document.getElementById('html5-player').textTracks[0]) document.getElementById('html5-player').textTracks[0].mode = 'showing';
                 toast("Subtitles Loaded", "success");
             };
             reader.readAsText(file);
         }
 
-        // --- AI & CHAT ---
+        // ============================================================
+        //  AI & CHAT
+        // ============================================================
         async function askAI(query) {
             const prompt = query || document.getElementById('chat-input').value.replace('@ai', '').trim();
-            if(!prompt) return;
-            if(!apiKey) return toast("API Key required", "error");
+            if (!prompt) return;
+            if (!apiKey) return toast("API Key required", "error");
             sendChat(null, prompt); toast("Thinking...", "info");
             try {
                 const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ contents: [{ parts: [{ text: "Short fun response: " + prompt }] }] })
                 });
                 const data = await res.json();
                 const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "Failed.";
                 const msgData = { type: 'chat', msg: text, user: 'AI', avatar: '✨', color: 'bg-purple-600' };
                 addChat('AI', text, '✨', 'bg-purple-600'); playNotificationSound();
-                if(state.mode === 'create') broadcast(msgData); else if(hostConn) hostConn.send(msgData);
-            } catch(e) { toast("AI Error", "error"); }
+                if (state.mode === 'create') broadcast(msgData); else if (hostConn) hostConn.send(msgData);
+            } catch (e) { toast("AI Error", "error"); }
         }
         function sendChat(e, manualMsg = null) {
-            if(e) e.preventDefault();
+            if (e) e.preventDefault();
             const inp = document.getElementById('chat-input');
             const msg = manualMsg || inp.value.trim();
-            if(!msg) return;
-            if(msg.startsWith('@ai') && !manualMsg) { askAI(msg.replace('@ai', '').trim()); inp.value = ''; return; }
+            if (!msg) return;
+            if (msg.startsWith('@ai') && !manualMsg) { askAI(msg.replace('@ai', '').trim()); inp.value = ''; return; }
             const data = { type: 'chat', msg, user: state.username, avatar: state.avatar, color: state.color };
             addChat(state.username, msg, state.avatar, state.color, true); playNotificationSound();
-            if(state.mode === 'create') broadcast(data); else if(hostConn) hostConn.send(data);
-            if(inp) inp.value = '';
+            if (state.mode === 'create') broadcast(data); else if (hostConn) hostConn.send(data);
+            if (inp) inp.value = '';
         }
         function sendEmoji(e) { sendChat(null, e); }
-        function addChat(user, msg, avatar, color, isMe=false) {
+        function addChat(user, msg, avatar, color, isMe = false) {
             const box = document.getElementById('chat-container');
             const div = document.createElement('div');
             div.className = `flex gap-3 ${isMe ? 'flex-row-reverse' : ''} animate-fade`;
@@ -944,74 +982,73 @@
             box.appendChild(div); box.scrollTop = box.scrollHeight;
         }
 
-        // --- UTILS ---
-        function toggleSettings() { const m = document.getElementById('settings-modal'); if(m.open) m.close(); else m.showModal(); }
-        function toggleMobileChat() { 
+        // ============================================================
+        //  UTILS & SETTINGS
+        // ============================================================
+        function toggleSettings() { const m = document.getElementById('settings-modal'); if (m.open) m.close(); else m.showModal(); }
+        function toggleMobileChat() {
             const sb = document.getElementById('chat-sidebar');
-            if(sb.classList.contains('translate-x-full')) { sb.classList.remove('translate-x-full'); document.getElementById('chat-badge').classList.add('hidden'); }
+            if (sb.classList.contains('translate-x-full')) { sb.classList.remove('translate-x-full'); document.getElementById('chat-badge').classList.add('hidden'); }
             else sb.classList.add('translate-x-full');
         }
         function toggleFullscreen() {
             const elem = document.getElementById('video-box');
-            if (!document.fullscreenElement) { elem.requestFullscreen().catch(err => toast("FS Error", "error")); } 
-            else { document.exitFullscreen(); }
+            if (!document.fullscreenElement) elem.requestFullscreen().catch(err => toast("FS Error", "error"));
+            else document.exitFullscreen();
         }
         function switchTab(tab) {
             const cChat = document.getElementById('view-chat'); const cUsers = document.getElementById('view-users');
             const tChat = document.getElementById('tab-chat'); const tUsers = document.getElementById('tab-users');
-            if(tab === 'chat') { cChat.classList.remove('hidden'); cUsers.classList.add('hidden'); tChat.classList.replace('inactive', 'active'); tUsers.classList.replace('active', 'inactive'); }
+            if (tab === 'chat') { cChat.classList.remove('hidden'); cUsers.classList.add('hidden'); tChat.classList.replace('inactive', 'active'); tUsers.classList.replace('active', 'inactive'); }
             else { cChat.classList.add('hidden'); cUsers.classList.remove('hidden'); tUsers.classList.replace('inactive', 'active'); tChat.classList.replace('active', 'inactive'); }
         }
         function saveSettings() {
             const name = document.getElementById('modal-username').value;
             apiKey = document.getElementById('ai-api-key').value;
-            if(name) state.username = name;
+            if (name) state.username = name;
             localStorage.setItem('zg_p2p_profile', JSON.stringify({ name: state.username, avatar: state.avatar, color: state.color, apiKey }));
-            
-            // Sync Profile Update
-            if(state.mode === 'create') { 
-                const me = userList.find(u => u.id === state.id); 
-                if(me) { me.username = name; me.avatar = state.avatar; me.color = state.color; }
-                broadcastUserList();
-                updateProfileUI();
-            } else if(hostConn && hostConn.open) {
+            if (state.mode === 'create') {
+                const me = userList.find(u => u.id === state.id);
+                if (me) { me.username = name; me.avatar = state.avatar; me.color = state.color; }
+                broadcastUserList(); updateProfileUI();
+            } else if (hostConn && hostConn.open) {
                 hostConn.send({ type: 'update-profile', username: state.username, avatar: state.avatar, color: state.color });
                 updateProfileUI();
             }
             toggleSettings(); toast("Settings Saved", "success");
         }
         function toggleHostOnly() {
-            if(state.mode !== 'create') return toast("Host Only", "error");
+            if (state.mode !== 'create') return toast("Host Only", "error");
             state.hostOnly = !state.hostOnly;
             const btn = document.getElementById('btn-host-only'); const knob = btn.firstElementChild;
-            if(state.hostOnly) { btn.classList.add('bg-indigo-600'); btn.classList.remove('bg-slate-700'); knob.classList.add('translate-x-5'); }
+            if (state.hostOnly) { btn.classList.add('bg-indigo-600'); btn.classList.remove('bg-slate-700'); knob.classList.add('translate-x-5'); }
             else { btn.classList.remove('bg-indigo-600'); btn.classList.add('bg-slate-700'); knob.classList.remove('translate-x-5'); }
             broadcast({ type: 'settings', key: 'hostOnly', val: state.hostOnly });
         }
         function toggleRoomLock() {
-            if(state.mode !== 'create') return toast("Host Only", "error");
+            if (state.mode !== 'create') return toast("Host Only", "error");
             state.isLocked = !state.isLocked;
             updateLockUI(state.isLocked);
             const btn = document.getElementById('btn-lock-room'); const knob = btn.firstElementChild;
-            if(state.isLocked) { btn.classList.add('bg-indigo-600'); btn.classList.remove('bg-slate-700'); knob.classList.add('translate-x-5'); }
+            if (state.isLocked) { btn.classList.add('bg-indigo-600'); btn.classList.remove('bg-slate-700'); knob.classList.add('translate-x-5'); }
             else { btn.classList.remove('bg-indigo-600'); btn.classList.add('bg-slate-700'); knob.classList.remove('translate-x-5'); }
             broadcast({ type: 'settings', key: 'isLocked', val: state.isLocked });
         }
-        function updateLockUI(locked) { const i = document.getElementById('room-locked-indicator'); if(locked) i.classList.remove('hidden'); else i.classList.add('hidden'); }
+        function updateLockUI(locked) { const i = document.getElementById('room-locked-indicator'); if (locked) i.classList.remove('hidden'); else i.classList.add('hidden'); }
         function copyId() {
             const id = document.getElementById('my-peer-id').innerText;
-            if(id === '...') return;
+            if (id === '...') return;
             navigator.clipboard.writeText(id).then(() => toast("Copied!", "success"));
         }
-        function toast(msg, type='info') {
+        function toast(msg, type = 'info') {
             const c = document.getElementById('toast-container');
             const d = document.createElement('div');
             let cl = 'bg-[#151923] border-slate-700';
-            if(type=='success') cl='bg-emerald-900/80 border-emerald-500/50';
-            if(type=='error') cl='bg-red-900/80 border-red-500/50';
+            if (type === 'success') cl = 'bg-emerald-900/80 border-emerald-500/50';
+            if (type === 'error')   cl = 'bg-red-900/80 border-red-500/50';
             d.className = `${cl} text-white border px-4 py-3 rounded-xl text-xs font-bold shadow-2xl backdrop-blur-md flex items-center gap-3 toast-enter`;
             d.innerHTML = type === 'success' ? `<i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i> ${msg}` : (type === 'error' ? `<i data-lucide="alert-circle" class="w-4 h-4 text-red-400"></i> ${msg}` : msg);
-            c.appendChild(d); lucide.createIcons(); setTimeout(()=>d.remove(), 3000);
+            c.appendChild(d); lucide.createIcons(); setTimeout(() => d.remove(), 3000);
         }
     </script>
 </body>
