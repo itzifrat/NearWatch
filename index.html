@@ -4,690 +4,1026 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>NearWatch | P2P Encrypted</title>
+    
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <style>
-        :root { --bg-dark: #0b0e14; --primary: #6366f1; }
-        body { background-color: var(--bg-dark); color: #e2e8f0; font-family: 'Inter', sans-serif; overflow: hidden; }
-        .video-wrapper { width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:#000; }
-        .video-container { position:relative; width:100%; aspect-ratio:16/9; max-height:80vh; background:black; overflow:hidden; }
-        .video-container iframe, .video-container video { position:absolute; top:0; left:0; width:100%; height:100%; outline:none; }
-        .fade-in { animation:fadeIn .5s ease-out; }
-        @keyframes fadeIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
-        .avatar-option { transition:all .2s; cursor:pointer; opacity:.7; transform:scale(.95); }
-        .avatar-option:hover { opacity:1; transform:scale(1.05); }
-        .avatar-option.selected { opacity:1; transform:scale(1.15); border-color:var(--primary); box-shadow:0 0 15px rgba(99,102,241,.6); }
-        ::-webkit-scrollbar{width:4px} ::-webkit-scrollbar-track{background:var(--bg-dark)} ::-webkit-scrollbar-thumb{background:#334155;border-radius:2px}
-        .quote-fade { animation:fadeInOut 8s infinite; }
-        @keyframes fadeInOut { 0%,100%{opacity:0} 10%,90%{opacity:1} }
-        .glass-panel { background:rgba(21,25,35,.9); backdrop-filter:blur(12px); border:1px solid rgba(255,255,255,.06); }
-        .spin { animation:spin 1s linear infinite; }
-        @keyframes spin { to{transform:rotate(360deg)} }
+    
+    <!-- PeerJS (Networking) -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 
-        /* Debug log */
-        #dbg { font-family:monospace; font-size:10px; line-height:1.6; max-height:90px; overflow-y:auto; }
-        #dbg .ok  { color:#34d399 }
-        #dbg .err { color:#f87171 }
-        #dbg .inf { color:#93c5fd }
-        #dbg .wrn { color:#fbbf24 }
+    <style>
+        :root { --bg-dark: #0b0e14; --primary: #6366f1; --surface: #151923; }
+        body { background-color: var(--bg-dark); color: #e2e8f0; font-family: 'Inter', sans-serif; overflow: hidden; }
+        
+        /* Video Container Responsive Logic */
+        .video-wrapper {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+        }
+        .video-container { 
+            position: relative; 
+            width: 100%;
+            max-width: 100%;
+            aspect-ratio: 16/9;
+            max-height: 80vh; /* Prevent cut-off on laptops */
+            background: black; 
+            overflow: hidden; 
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); 
+        }
+        .video-container iframe, .video-container video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; outline: none; }
+
+        /* Animations */
+        .fade-in { animation: fadeIn 0.5s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .toast-enter { animation: slideIn 0.3s ease-out forwards; }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(-20px) translateX(-50%); } to { opacity: 1; transform: translateY(0) translateX(-50%); } }
+        
+        .avatar-option { transition: all 0.2s; cursor: pointer; opacity: 0.7; transform: scale(0.95); }
+        .avatar-option:hover { opacity: 1; transform: scale(1.05); }
+        .avatar-option.selected { opacity: 1; transform: scale(1.15); border-color: var(--primary); box-shadow: 0 0 15px rgba(99, 102, 241, 0.6); }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: var(--bg-dark); }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+
+        /* Mobile Sidebar */
+        .mobile-sidebar { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .mobile-sidebar.closed { transform: translateX(100%); }
+        
+        /* Quote Ticker */
+        .quote-fade { animation: fadeInOut 8s infinite; }
+        @keyframes fadeInOut {
+            0%, 100% { opacity: 0; transform: translateY(5px); }
+            10%, 90% { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Glassmorphism */
+        .glass-panel {
+            background: rgba(21, 25, 35, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
     </style>
 </head>
-<body class="h-screen w-screen flex flex-col">
+<body class="h-screen w-screen relative flex flex-col">
 
-<div id="toast-container" class="fixed top-4 left-1/2 -translate-x-1/2 z-[200] flex flex-col gap-2 pointer-events-none"></div>
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed top-20 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 pointer-events-none w-max max-w-[90%]"></div>
 
-<!-- Settings Modal -->
-<dialog id="settings-modal" class="bg-transparent p-0 backdrop:bg-black/80 w-full max-w-md m-auto">
-    <div class="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-6 text-white mx-4">
-        <div class="flex justify-between items-center mb-5">
-            <h2 class="text-xl font-bold">⚙️ Settings</h2>
-            <button onclick="toggleSettings()" class="text-slate-400 hover:text-white text-xl">✕</button>
-        </div>
-        <div class="space-y-5">
-            <div>
-                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Profile</label>
-                <div class="flex items-center gap-3 mb-3">
-                    <div id="modal-avatar-preview" class="w-14 h-14 rounded-full bg-indigo-600 flex items-center justify-center text-2xl">👾</div>
-                    <input type="text" id="modal-username" class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500" placeholder="Display Name">
-                </div>
-                <div class="grid grid-cols-5 gap-2 p-2 bg-slate-800/50 rounded-xl border border-slate-700/50">
-                    <button onclick="pickAvatar('👾','bg-indigo-600')" class="h-10 w-10 rounded-full bg-indigo-600 flex items-center justify-center hover:scale-110 transition mx-auto">👾</button>
-                    <button onclick="pickAvatar('🐱','bg-purple-600')" class="h-10 w-10 rounded-full bg-purple-600 flex items-center justify-center hover:scale-110 transition mx-auto">🐱</button>
-                    <button onclick="pickAvatar('🤖','bg-emerald-600')" class="h-10 w-10 rounded-full bg-emerald-600 flex items-center justify-center hover:scale-110 transition mx-auto">🤖</button>
-                    <button onclick="pickAvatar('🦊','bg-orange-600')" class="h-10 w-10 rounded-full bg-orange-600 flex items-center justify-center hover:scale-110 transition mx-auto">🦊</button>
-                    <button onclick="pickAvatar('👻','bg-pink-600')" class="h-10 w-10 rounded-full bg-pink-600 flex items-center justify-center hover:scale-110 transition mx-auto">👻</button>
-                </div>
+    <!-- Settings Modal -->
+    <dialog id="settings-modal" class="bg-transparent p-0 backdrop:bg-black/80 backdrop:backdrop-blur-sm w-full max-w-md m-auto">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-6 text-white mx-4">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold flex items-center gap-2"><i data-lucide="settings" class="w-5 h-5 text-indigo-400"></i> Settings</h2>
+                <button onclick="toggleSettings()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
             </div>
-            <div id="host-settings-group" class="hidden pt-4 border-t border-slate-800 space-y-3">
-                <label class="block text-[10px] font-bold text-slate-500 uppercase">Room Security</label>
-                <div class="flex items-center justify-between"><span class="text-sm">Lock Room</span>
-                    <button id="btn-lock-room" onclick="toggleRoomLock()" class="w-10 h-5 rounded-full bg-slate-700 relative transition-colors"><div class="w-3 h-3 bg-white rounded-full absolute top-1 left-1 transition-transform"></div></button></div>
-                <div class="flex items-center justify-between"><span class="text-sm">Host-Only Controls</span>
-                    <button id="btn-host-only" onclick="toggleHostOnly()" class="w-10 h-5 rounded-full bg-slate-700 relative transition-colors"><div class="w-3 h-3 bg-white rounded-full absolute top-1 left-1 transition-transform"></div></button></div>
-            </div>
-            <div>
-                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">AI Key</label>
-                <input type="password" id="ai-api-key" placeholder="Gemini API Key" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs outline-none focus:border-purple-500">
-            </div>
-            <button onclick="saveSettings()" class="w-full bg-indigo-600 hover:bg-indigo-500 py-3 rounded-lg font-bold text-sm transition">Save</button>
-            <p class="text-center text-[10px] text-slate-600">NearWatch v4.0 • © Efrat Al Ahad</p>
-        </div>
-    </div>
-</dialog>
-
-<!-- ══════════════════ LOGIN VIEW ══════════════════ -->
-<div id="login-view" class="absolute inset-0 z-50 flex items-center justify-center bg-[url('https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=2525&auto=format&fit=crop')] bg-cover bg-center">
-    <div class="absolute inset-0 bg-black/85 backdrop-blur-sm"></div>
-
-    <div class="relative glass-panel p-8 rounded-3xl shadow-2xl max-w-sm w-full mx-4 fade-in">
-        <div class="text-center mb-6">
-            <div class="bg-gradient-to-br from-indigo-500 to-purple-600 w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg">
-                <i data-lucide="monitor-play" class="text-white w-7 h-7"></i>
-            </div>
-            <h1 class="text-2xl font-bold text-white mb-2">NearWatch</h1>
-            <span class="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase">
-                <i data-lucide="shield-check" class="w-3 h-3"></i> P2P Encrypted
-            </span>
-        </div>
-
-        <!-- Avatar picker -->
-        <div class="flex justify-center gap-3 mb-6">
-            <div class="avatar-option w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-lg border-2 border-transparent" onclick="selectAvatar('👾','bg-indigo-600')">👾</div>
-            <div class="avatar-option w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center text-lg border-2 border-transparent" onclick="selectAvatar('🐱','bg-purple-600')">🐱</div>
-            <div class="avatar-option w-10 h-10 rounded-full bg-emerald-600 flex items-center justify-center text-lg border-2 border-transparent" onclick="selectAvatar('🤖','bg-emerald-600')">🤖</div>
-            <div class="avatar-option w-10 h-10 rounded-full bg-orange-600 flex items-center justify-center text-lg border-2 border-transparent" onclick="selectAvatar('🦊','bg-orange-600')">🦊</div>
-        </div>
-
-        <div class="space-y-3">
-            <!-- Name -->
-            <input type="text" id="username-input" placeholder="Your display name" class="w-full bg-[#0f1218] border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none text-sm placeholder-slate-500">
-
-            <!-- Mode tabs -->
-            <div class="grid grid-cols-2 gap-1 p-1 bg-[#0f1218] rounded-xl border border-slate-800">
-                <button onclick="switchMode('create')" id="btn-mode-create" class="py-2 text-xs font-bold rounded-lg bg-indigo-600 text-white">Create Room</button>
-                <button onclick="switchMode('join')"   id="btn-mode-join"   class="py-2 text-xs font-bold rounded-lg text-slate-400 hover:text-white">Join Room</button>
-            </div>
-
-            <!-- Create -->
-            <div id="create-group">
-                <div class="relative">
-                    <input type="text" id="create-id-input" placeholder="Room ID (leave blank = random)" class="w-full bg-[#0f1218] border border-slate-700 rounded-xl pl-4 pr-10 py-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none text-sm placeholder-slate-500">
-                    <button onclick="fillRandom()" class="absolute right-3 top-3 text-slate-500 hover:text-indigo-400"><i data-lucide="dices" class="w-5 h-5"></i></button>
-                </div>
-            </div>
-
-            <!-- Join -->
-            <div id="join-group" class="hidden">
-                <input type="text" id="join-id-input" placeholder="Enter Room ID to join" class="w-full bg-[#0f1218] border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none text-sm placeholder-slate-500">
-            </div>
-
-            <!-- Status box -->
-            <div id="status-box" class="hidden bg-black/40 border border-slate-800 rounded-xl p-3 space-y-2">
-                <div class="flex items-center gap-2">
-                    <svg id="spinner" class="spin w-3.5 h-3.5 text-indigo-400 shrink-0 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10" stroke-dasharray="31.4" stroke-dashoffset="10"/></svg>
-                    <span id="status-msg" class="text-xs text-slate-400 font-medium"></span>
-                </div>
-                <div id="dbg"></div>
-            </div>
-
-            <!-- Main CTA -->
-            <button id="action-btn" onclick="handleStart()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl shadow-lg transition text-sm uppercase tracking-wide">
-                Create Room
-            </button>
-            <button id="retry-btn" onclick="handleStart()" class="hidden w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-bold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 transition">
-                🔄 Retry Connection
-            </button>
-        </div>
-    </div>
-</div>
-
-<!-- ══════════════════ APP VIEW ══════════════════ -->
-<div id="app-view" class="flex flex-col h-full hidden bg-[#0b0e14]">
-    <header class="h-14 border-b border-slate-800 flex items-center justify-between px-4 z-20 shrink-0">
-        <div class="flex items-center gap-3">
-            <div class="bg-indigo-600 p-1.5 rounded-lg"><i data-lucide="monitor-play" class="text-white w-4 h-4"></i></div>
-            <span class="hidden sm:block font-bold text-white text-sm">NearWatch</span>
-        </div>
-        <div class="flex items-center gap-2 bg-[#151923] border border-slate-800 rounded-full px-3 py-1 cursor-pointer" onclick="copyId()">
-            <span id="sync-dot" class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span id="my-peer-id" class="font-mono text-[10px] text-slate-400 max-w-[120px] truncate">...</span>
-            <i data-lucide="copy" class="w-3 h-3 text-slate-500"></i>
-            <div id="room-locked-indicator" class="hidden"><i data-lucide="lock" class="w-3 h-3 text-red-400"></i></div>
-        </div>
-        <div class="flex items-center gap-3">
-            <button onclick="toggleMobileChat()" class="lg:hidden text-slate-400 hover:text-white relative">
-                <i data-lucide="message-square" class="w-5 h-5"></i>
-                <span id="chat-badge" class="absolute -top-1 -right-1 w-2 h-2 bg-indigo-500 rounded-full hidden"></span>
-            </button>
-            <button onclick="toggleSettings()" class="text-slate-400 hover:text-white"><i data-lucide="settings" class="w-5 h-5"></i></button>
-            <div id="user-avatar-display" class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm cursor-pointer" onclick="toggleSettings()">?</div>
-        </div>
-    </header>
-
-    <main class="flex-1 flex overflow-hidden">
-        <!-- Video column -->
-        <div class="flex-1 flex flex-col">
-            <!-- Floating URL bar -->
-            <div class="absolute top-16 left-1/2 -translate-x-1/2 w-[95%] max-w-2xl z-20 opacity-0 hover:opacity-100 focus-within:opacity-100 transition duration-300">
-                <div class="flex gap-2 bg-[#151923]/95 backdrop-blur p-1.5 rounded-xl border border-slate-700 shadow-2xl">
-                    <input type="text" id="url-input" placeholder="Paste YouTube or MP4 URL…" class="flex-1 bg-transparent text-xs text-white outline-none pl-2 placeholder-slate-500">
-                    <button onclick="loadVideo()" class="bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition">Play</button>
-                    <div class="w-px bg-slate-700"></div>
-                    <button onclick="document.getElementById('file-input').click()" class="flex items-center gap-1 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg text-xs text-white border border-slate-700 transition">
-                        <i data-lucide="file-video" class="w-3 h-3 text-emerald-400"></i><span class="hidden sm:inline">File</span>
-                    </button>
-                    <input type="file" id="file-input" class="hidden" accept="video/*" onchange="handleFile(this)">
-                </div>
-            </div>
-
-            <!-- Video -->
-            <div class="flex-1 bg-black flex items-center justify-center">
-                <div class="video-wrapper">
-                    <div id="video-box" class="video-container">
-                        <div id="placeholder" class="absolute inset-0 flex flex-col items-center justify-center bg-[#0b0e14] z-10">
-                            <i data-lucide="film" class="w-16 h-16 mb-4 opacity-20 text-slate-400"></i>
-                            <p class="font-bold text-white">Ready to watch</p>
-                            <p class="text-xs text-slate-500 mt-1">Hover top to load video</p>
+            <div class="space-y-6">
+                <!-- Profile Customization -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-3">Profile</label>
+                    <div class="flex items-center gap-4 mb-4">
+                        <div id="modal-avatar-preview" class="w-16 h-16 rounded-full flex items-center justify-center text-3xl shadow-lg border-2 border-slate-700 transition-all"></div>
+                        <div class="flex-1">
+                            <input type="text" id="modal-username" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:border-indigo-500 outline-none mb-2" placeholder="Display Name">
+                            <div class="text-[10px] text-slate-500">Pick an avatar below:</div>
                         </div>
-                        <video id="html5-player" class="hidden" controls playsinline crossorigin="anonymous">
-                            <track id="player-track" kind="subtitles" srclang="en" label="English" default>
-                        </video>
-                        <div id="youtube-player" class="hidden"></div>
+                    </div>
+                    
+                    <!-- Modal Avatar Picker -->
+                    <div class="grid grid-cols-5 gap-2 p-2 bg-slate-800/50 rounded-xl border border-slate-700/50">
+                        <button onclick="selectModalAvatar('👾', 'bg-indigo-600')" class="h-10 w-10 rounded-full bg-indigo-600 flex items-center justify-center hover:scale-110 transition mx-auto text-lg">👾</button>
+                        <button onclick="selectModalAvatar('🐱', 'bg-purple-600')" class="h-10 w-10 rounded-full bg-purple-600 flex items-center justify-center hover:scale-110 transition mx-auto text-lg">🐱</button>
+                        <button onclick="selectModalAvatar('🤖', 'bg-emerald-600')" class="h-10 w-10 rounded-full bg-emerald-600 flex items-center justify-center hover:scale-110 transition mx-auto text-lg">🤖</button>
+                        <button onclick="selectModalAvatar('🦊', 'bg-orange-600')" class="h-10 w-10 rounded-full bg-orange-600 flex items-center justify-center hover:scale-110 transition mx-auto text-lg">🦊</button>
+                        <button onclick="selectModalAvatar('👻', 'bg-pink-600')" class="h-10 w-10 rounded-full bg-pink-600 flex items-center justify-center hover:scale-110 transition mx-auto text-lg">👻</button>
+                    </div>
+                    
+                    <!-- Hidden fields for modal state -->
+                    <input type="hidden" id="modal-selected-avatar">
+                    <input type="hidden" id="modal-selected-color">
+                </div>
+                
+                <!-- Host Controls -->
+                <div id="host-settings-group" class="hidden space-y-4 pt-4 border-t border-slate-800">
+                    <div class="p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+                        <label class="block text-xs font-bold text-slate-500 uppercase mb-3">Room Security</label>
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-sm">Lock Room <i data-lucide="lock" class="inline w-3 h-3 text-slate-500 ml-1"></i></span>
+                            <button id="btn-lock-room" onclick="toggleRoomLock()" class="w-10 h-5 rounded-full bg-slate-700 relative transition-colors">
+                                <div class="w-3 h-3 bg-white rounded-full absolute top-1 left-1 transition-transform"></div>
+                            </button>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm">Host-Only Controls</span>
+                            <button id="btn-host-only" onclick="toggleHostOnly()" class="w-10 h-5 rounded-full bg-slate-700 relative transition-colors">
+                                <div class="w-3 h-3 bg-white rounded-full absolute top-1 left-1 transition-transform"></div>
+                            </button>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Controls bar -->
-            <div class="bg-[#151923] border-t border-slate-800 px-4 py-3 flex items-center justify-between shrink-0">
-                <div class="flex items-center gap-4">
-                    <button onclick="seekRelative(-10)" class="text-slate-400 hover:text-white transition"><i data-lucide="rotate-ccw" class="w-5 h-5"></i></button>
-                    <button onclick="seekRelative(10)"  class="text-slate-400 hover:text-white transition"><i data-lucide="rotate-cw"  class="w-5 h-5"></i></button>
-                    <select id="speed-select" onchange="changeSpeed(this.value)" class="bg-[#0b0e14] text-slate-300 text-xs border border-slate-700 rounded px-2 py-1 outline-none">
-                        <option value="0.5">0.5×</option><option value="1" selected>1.0×</option>
-                        <option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2.0×</option>
-                    </select>
-                    <button onclick="document.getElementById('sub-input').click()" class="text-slate-400 hover:text-white transition"><i data-lucide="captions" class="w-5 h-5"></i></button>
-                    <input type="file" id="sub-input" accept=".vtt,.srt" class="hidden" onchange="handleSubtitle(this)">
+                <!-- AI Key -->
+                <div class="pt-2">
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-2">AI Integration</label>
+                    <div class="relative">
+                        <input type="password" id="ai-api-key" placeholder="Paste Gemini API Key" class="w-full bg-slate-800 border border-slate-700 rounded-lg pl-3 pr-8 py-2 text-xs focus:border-purple-500 outline-none">
+                        <i data-lucide="key" class="absolute right-2 top-2 w-3.5 h-3.5 text-slate-500"></i>
+                    </div>
                 </div>
-                <p id="quote-text" class="hidden md:block text-xs text-slate-500 italic quote-fade">Watch together. No limits.</p>
-                <button onclick="toggleFullscreen()" class="text-slate-400 hover:text-white transition"><i data-lucide="maximize" class="w-5 h-5"></i></button>
+
+                <button onclick="saveSettings()" class="w-full bg-indigo-600 hover:bg-indigo-500 py-3 rounded-lg font-bold text-sm shadow-lg transition-colors">Save Changes</button>
+                <div class="pt-4 border-t border-slate-700 text-center">
+                    <p class="text-[10px] text-slate-500">NearWatch v2.0 • P2P Encrypted</p>
+                    <p class="text-[10px] text-slate-600 font-medium mt-1">Copyright © Efrat Al Ahad</p>
+                </div>
             </div>
         </div>
+    </dialog>
 
-        <!-- Chat sidebar -->
-        <div id="chat-sidebar" class="fixed inset-y-0 right-0 z-30 w-80 bg-[#151923] border-l border-slate-800 flex flex-col transform translate-x-full lg:translate-x-0 lg:static transition-transform duration-300">
-            <button onclick="toggleMobileChat()" class="lg:hidden absolute top-3 right-3 p-1 text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
-            <div class="flex border-b border-slate-800 mt-10 lg:mt-0">
-                <button onclick="switchTab('chat')"  id="tab-chat"  class="w-1/2 py-3 text-xs font-bold text-indigo-400 border-b-2 border-indigo-500">Chat</button>
-                <button onclick="switchTab('users')" id="tab-users" class="w-1/2 py-3 text-xs font-bold text-slate-500 flex items-center justify-center gap-1">
-                    Users <span id="user-count" class="text-[9px] bg-slate-800 px-1.5 py-0.5 rounded-full">1</span>
+    <!-- Login View -->
+    <div id="login-view" class="absolute inset-0 z-50 flex items-center justify-center bg-[#0b0e14] bg-[url('https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=2525&auto=format&fit=crop')] bg-cover bg-center">
+        <div class="absolute inset-0 bg-black/80 backdrop-blur-sm"></div>
+        
+        <div class="relative glass-panel p-8 rounded-3xl shadow-2xl max-w-md w-full mx-4 fade-in">
+            <div class="text-center mb-8">
+                <div class="bg-gradient-to-br from-indigo-500 to-purple-600 w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-indigo-500/20">
+                    <i data-lucide="monitor-play" class="text-white w-7 h-7"></i>
+                </div>
+                <h1 class="text-2xl font-bold text-white tracking-tight mb-2">NearWatch</h1>
+                <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
+                    <i data-lucide="shield-check" class="w-3 h-3"></i>
+                    <span>P2P Encrypted</span>
+                </div>
+            </div>
+
+            <!-- Avatar Selector -->
+            <div class="flex justify-center gap-4 mb-8">
+                <div class="avatar-option w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-lg border-2 border-transparent shadow-lg" onclick="selectAvatar('👾', 'bg-indigo-600')">👾</div>
+                <div class="avatar-option w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center text-lg border-2 border-transparent shadow-lg" onclick="selectAvatar('🐱', 'bg-purple-600')">🐱</div>
+                <div class="avatar-option w-10 h-10 rounded-full bg-emerald-600 flex items-center justify-center text-lg border-2 border-transparent shadow-lg" onclick="selectAvatar('🤖', 'bg-emerald-600')">🤖</div>
+                <div class="avatar-option w-10 h-10 rounded-full bg-orange-600 flex items-center justify-center text-lg border-2 border-transparent shadow-lg" onclick="selectAvatar('🦊', 'bg-orange-600')">🦊</div>
+            </div>
+
+            <div class="space-y-6">
+                <!-- Name Input -->
+                <div class="space-y-1.5">
+                    <div class="relative group">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i data-lucide="user" class="h-4 w-4 text-slate-500"></i>
+                        </div>
+                        <input type="text" id="username-input" placeholder="Display Name" class="w-full bg-[#0f1218] border border-slate-700 rounded-xl pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition text-sm placeholder-slate-500">
+                    </div>
+                </div>
+                
+                <!-- Create/Join Toggle -->
+                <div class="grid grid-cols-2 gap-1 p-1 bg-[#0f1218] rounded-xl border border-slate-800">
+                    <button onclick="switchMode('create')" id="btn-mode-create" class="py-2 text-xs font-bold rounded-lg transition-all bg-indigo-600 text-white shadow-lg">Create Room</button>
+                    <button onclick="switchMode('join')" id="btn-mode-join" class="py-2 text-xs font-bold rounded-lg transition-all text-slate-400 hover:text-white">Join Room</button>
+                </div>
+
+                <!-- Create Room Input -->
+                <div id="create-input-group" class="space-y-1.5 relative">
+                    <div class="relative group">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i data-lucide="key" class="h-4 w-4 text-slate-500"></i>
+                        </div>
+                        <input type="text" id="create-id-input" placeholder="Room ID (Optional)" class="w-full bg-[#0f1218] border border-slate-700 rounded-xl pl-10 pr-12 py-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none transition text-sm placeholder-slate-500">
+                        <button onclick="fillRandomId()" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-500 hover:text-indigo-400 transition-colors" title="Generate Random ID">
+                            <i data-lucide="dices" class="h-5 w-5"></i>
+                        </button>
+                    </div>
+                    <p class="text-[10px] text-slate-500 pl-1 mt-1">Leave blank for random ID.</p>
+                </div>
+
+                <!-- Join Room Input -->
+                <div id="join-input-group" class="hidden space-y-1.5 relative">
+                    <div class="relative group">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i data-lucide="link" class="h-4 w-4 text-slate-500"></i>
+                        </div>
+                        <input type="text" id="join-id-input" placeholder="Enter Room ID" class="w-full bg-[#0f1218] border border-slate-700 rounded-xl pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none transition text-sm placeholder-slate-500">
+                    </div>
+                </div>
+
+                <button onclick="handleStart()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl shadow-lg transition transform active:scale-[0.98] text-sm uppercase tracking-wide flex items-center justify-center gap-2" id="action-btn">
+                    Create Room
                 </button>
-            </div>
-            <div id="view-chat" class="flex-1 flex flex-col overflow-hidden bg-[#0b0e14]">
-                <div id="chat-container" class="flex-1 overflow-y-auto p-4 space-y-3">
-                    <div class="text-center text-[10px] text-slate-600 uppercase tracking-widest font-bold">— Room Created —</div>
-                </div>
-                <div class="p-3 bg-[#151923] border-t border-slate-800">
-                    <div class="flex gap-2 mb-3 overflow-x-auto pb-1">
-                        <button onclick="sendEmoji('👋')" class="text-xl hover:scale-110 transition">👋</button>
-                        <button onclick="sendEmoji('😂')" class="text-xl hover:scale-110 transition">😂</button>
-                        <button onclick="sendEmoji('🔥')" class="text-xl hover:scale-110 transition">🔥</button>
-                        <button onclick="sendEmoji('😮')" class="text-xl hover:scale-110 transition">😮</button>
-                        <button onclick="sendEmoji('❤️')" class="text-xl hover:scale-110 transition">❤️</button>
-                        <button onclick="askAI('Suggest a movie')" class="ml-auto whitespace-nowrap text-[10px] bg-purple-500/10 text-purple-300 px-2.5 py-1 rounded-full border border-purple-500/20 hover:bg-purple-500/20 transition">✨ AI Idea</button>
-                    </div>
-                    <form onsubmit="sendChat(event)" class="relative">
-                        <input id="chat-input" type="text" placeholder="Message…" class="w-full bg-[#0b0e14] border border-slate-700 rounded-xl py-3 pl-4 pr-10 text-xs text-white focus:border-indigo-500 outline-none placeholder-slate-600">
-                        <button type="submit" class="absolute right-2 top-2.5 text-slate-400 hover:text-indigo-400"><i data-lucide="send-horizontal" class="w-5 h-5"></i></button>
-                    </form>
-                </div>
-            </div>
-            <div id="view-users" class="flex-1 hidden overflow-y-auto p-4 bg-[#0b0e14]">
-                <p class="text-[10px] font-bold text-slate-500 uppercase mb-4">Participants</p>
-                <div id="user-list-container" class="space-y-2"></div>
+                <p id="status-msg" class="text-center text-xs text-slate-400 h-4"></p>
             </div>
         </div>
-    </main>
-</div>
+    </div>
 
-<!-- ══════════════════════════════════════════
-     SCRIPT
-═══════════════════════════════════════════ -->
-<script>
-'use strict';
+    <!-- App View -->
+    <div id="app-view" class="flex flex-col h-full hidden bg-[#0b0e14]">
+        <!-- Header -->
+        <header class="h-14 border-b border-slate-800 flex items-center justify-between px-4 z-20 shrink-0 bg-[#0b0e14]">
+            <div class="flex items-center gap-3">
+                <div class="bg-indigo-600 p-1.5 rounded-lg">
+                    <i data-lucide="monitor-play" class="text-white w-4 h-4"></i>
+                </div>
+                <div class="hidden sm:block">
+                    <h1 class="font-bold text-white text-sm tracking-tight">NearWatch</h1>
+                </div>
+            </div>
+            
+            <!-- Room Info & Status -->
+            <div class="flex items-center gap-2 bg-[#151923] border border-slate-800 rounded-full px-3 py-1">
+                <span id="sync-dot" class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <p class="text-[10px] text-slate-400 cursor-pointer hover:text-indigo-400 transition flex items-center gap-2" onclick="copyId()">
+                    <span id="my-peer-id" class="font-mono max-w-[80px] sm:max-w-[150px] truncate">...</span> 
+                    <i data-lucide="copy" class="w-3 h-3"></i>
+                </p>
+                <div id="room-locked-indicator" class="hidden">
+                    <i data-lucide="lock" class="w-3 h-3 text-red-400"></i>
+                </div>
+            </div>
 
-// ─── PeerJS CDNs (tried in order) ───────────────────────────────
-const PEERJS_CDNS = [
-    'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js',
-    'https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js',
-    'https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js',
-];
+            <div class="flex items-center gap-3">
+                <button onclick="toggleMobileChat()" class="lg:hidden text-slate-400 hover:text-white p-2 relative">
+                    <i data-lucide="message-square" class="w-5 h-5"></i>
+                    <span id="chat-badge" class="absolute top-1 right-1 w-2 h-2 bg-indigo-500 rounded-full hidden"></span>
+                </button>
+                <button onclick="toggleSettings()" class="text-slate-400 hover:text-white transition"><i data-lucide="settings" class="w-5 h-5"></i></button>
+                <div id="user-avatar-display" class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center font-bold text-sm shadow-inner cursor-pointer" onclick="toggleSettings()">?</div>
+            </div>
+        </header>
 
-// ─── ICE configs (tried in order, escalating from STUN → TURN) ──
-//
-//  WHY THIS ORDER:
-//  Config 0 – basic STUN only (works if both peers are on same NAT or open internet)
-//  Config 1 – multiple Google STUN servers (helps with some symmetric NAT)
-//  Config 2 – adds free Metered/Open Relay TURN (fixes the "hostConn open timeout")
-//  Config 3 – TURN only, forces relay (always works, slightly higher latency)
-//
-const ICE_CONFIGS = [
-    // 0: Minimal STUN
-    { iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-    ]},
-    // 1: Multiple STUN
-    { iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun2.l.google.com:19302' },
-        { urls: 'stun:stun3.l.google.com:19302' },
-        { urls: 'stun:stun4.l.google.com:19302' },
-        { urls: 'stun:global.stun.twilio.com:3478' },
-    ]},
-    // 2: STUN + Free TURN (Open Relay Project)
-    { iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'turn:openrelay.metered.ca:80',       username: 'openrelayproject', credential: 'openrelayproject' },
-        { urls: 'turn:openrelay.metered.ca:443',      username: 'openrelayproject', credential: 'openrelayproject' },
-        { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
-        { urls: 'turns:openrelay.metered.ca:443',     username: 'openrelayproject', credential: 'openrelayproject' },
-    ]},
-    // 3: TURN relay only (most reliable, always works)
-    { iceTransportPolicy: 'relay',
-      iceServers: [
-        { urls: 'turn:openrelay.metered.ca:80',       username: 'openrelayproject', credential: 'openrelayproject' },
-        { urls: 'turn:openrelay.metered.ca:443',      username: 'openrelayproject', credential: 'openrelayproject' },
-        { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
-        { urls: 'turns:openrelay.metered.ca:443',     username: 'openrelayproject', credential: 'openrelayproject' },
-    ]},
-];
+        <main class="flex-1 flex overflow-hidden relative">
+            <!-- Left: Video & Controls -->
+            <div class="flex-1 flex flex-col bg-black relative w-full h-full">
+                <!-- Floating Source Input -->
+                <div class="absolute top-4 left-1/2 -translate-x-1/2 w-[95%] max-w-2xl z-20 opacity-0 hover:opacity-100 transition duration-300">
+                    <div class="flex flex-wrap justify-center gap-2 bg-[#151923]/90 backdrop-blur p-1.5 rounded-xl border border-slate-700 shadow-2xl">
+                        <div class="flex items-center flex-1 min-w-[150px] gap-2">
+                            <input type="text" id="url-input" placeholder="YouTube / MP4 URL" class="bg-transparent border-none text-xs w-full text-white focus:ring-0 outline-none pl-2">
+                            <button onclick="loadVideo()" class="bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition">Play</button>
+                        </div>
+                        <div class="w-px h-6 bg-slate-700 hidden sm:block"></div>
+                        <button onclick="document.getElementById('file-input').click()" class="flex items-center gap-2 bg-[#1f2937] hover:bg-slate-700 px-3 py-1.5 rounded-lg text-xs text-white border border-slate-700 transition">
+                            <i data-lucide="file-video" class="w-3 h-3 text-emerald-500"></i> <span class="hidden sm:inline">File</span>
+                        </button>
+                        <input type="file" id="file-input" class="hidden" accept="video/*" onchange="handleFile(this)">
+                    </div>
+                </div>
 
-// Current ICE config index (escalates on failure)
-let iceIdx = 0;
+                <!-- Video Stage -->
+                <div class="flex-1 overflow-hidden bg-[#000] flex flex-col justify-center items-center">
+                    <div class="video-wrapper">
+                        <div id="video-box" class="video-container">
+                            <div id="placeholder" class="absolute inset-0 flex flex-col items-center justify-center bg-[#0b0e14] text-slate-500 z-10">
+                                <i data-lucide="film" class="w-12 h-12 md:w-16 md:h-16 mb-4 opacity-30"></i>
+                                <h3 class="text-lg font-bold text-white mb-1">Ready?</h3>
+                                <p class="text-xs text-slate-500">Paste link or load file</p>
+                            </div>
+                            <video id="html5-player" class="hidden" controls playsinline crossorigin="anonymous">
+                                <track id="player-track" kind="subtitles" srclang="en" label="English" default>
+                            </video>
+                            <div id="youtube-player" class="hidden"></div>
+                        </div>
+                    </div>
+                </div>
 
-// ─── State ───────────────────────────────────────────────────────
-let peer, connections = [], hostConn = null;
-let isSyncing = false, apiKey = '';
-let connTimeout = null, retryCount = 0;
-const MAX_CONN_RETRIES = ICE_CONFIGS.length - 1;
-let userList = [];
-const quotes = ['Watch together. No limits.','Tonight, we\'re not alone.','Distance shouldn\'t pause the movie.','Same screen. Same moment.','Turn loneliness into togetherness.'];
-const genId = () => Math.random().toString(36).slice(2, 8);
+                <!-- Bottom Controls Bar -->
+                <div class="w-full bg-[#151923] border-t border-slate-800 px-4 py-3 flex items-center justify-between shrink-0 z-20">
+                    <div class="flex items-center gap-4">
+                        <!-- Rewind/Forward -->
+                        <div class="flex gap-2">
+                            <button onclick="seekRelative(-10)" class="text-slate-400 hover:text-white transition" title="-10s"><i data-lucide="rotate-ccw" class="w-5 h-5"></i></button>
+                            <button onclick="seekRelative(10)" class="text-slate-400 hover:text-white transition" title="+10s"><i data-lucide="rotate-cw" class="w-5 h-5"></i></button>
+                        </div>
 
-const S = {
-    mode: 'create', id: null, username: 'Guest', avatar: '👾', color: 'bg-indigo-600',
-    hostOnly: false, isLocked: false, maxUsers: 10, isCoHost: false, targetHostId: null,
-    video: { type: null, src: null, time: 0, state: 'paused', speed: 1 }, ytPlayer: null
-};
+                        <!-- Speed -->
+                        <div class="relative group">
+                            <select id="speed-select" onchange="changeSpeed(this.value)" class="bg-[#0b0e14] text-slate-300 text-xs border border-slate-700 rounded px-2 py-1 focus:border-indigo-500 outline-none appearance-none pr-6 cursor-pointer">
+                                <option value="0.5">0.5x</option>
+                                <option value="1" selected>1.0x</option>
+                                <option value="1.25">1.25x</option>
+                                <option value="1.5">1.5x</option>
+                                <option value="2">2.0x</option>
+                            </select>
+                            <i data-lucide="chevron-down" class="w-3 h-3 text-slate-500 absolute right-1.5 top-1.5 pointer-events-none"></i>
+                        </div>
 
-// Audio
-const actx = new (window.AudioContext || window.webkitAudioContext)();
-function ping() {
-    if (actx.state === 'suspended') actx.resume();
-    const o = actx.createOscillator(), g = actx.createGain();
-    o.connect(g); g.connect(actx.destination);
-    o.type = 'sine'; o.frequency.setValueAtTime(500, actx.currentTime);
-    o.frequency.exponentialRampToValueAtTime(900, actx.currentTime + .12);
-    g.gain.setValueAtTime(.07, actx.currentTime); g.gain.exponentialRampToValueAtTime(.001, actx.currentTime + .15);
-    o.start(); o.stop(actx.currentTime + .15);
-}
+                        <!-- Subtitles -->
+                        <button onclick="document.getElementById('sub-input').click()" class="text-slate-400 hover:text-white transition" title="Subtitles"><i data-lucide="captions" class="w-5 h-5"></i></button>
+                        <input type="file" id="sub-input" accept=".vtt,.srt" class="hidden" onchange="handleSubtitle(this)">
+                    </div>
 
-// ─── Debug panel ─────────────────────────────────────────────────
-function log(msg, type = 'inf') {
-    console.log(`[NW][${type}] ${msg}`);
-    const p = document.getElementById('dbg'); if (!p) return;
-    const d = document.createElement('div');
-    d.className = type; d.textContent = '› ' + msg;
-    p.appendChild(d); p.scrollTop = p.scrollHeight;
-}
+                    <!-- Quote Ticker -->
+                    <div id="quote-container" class="hidden md:flex flex-1 justify-center items-center overflow-hidden mx-4">
+                        <p id="quote-text" class="text-xs text-slate-500 italic truncate max-w-[400px] quote-fade text-center font-medium">Watch together. No limits.</p>
+                    </div>
 
-// ─── PeerJS loader ───────────────────────────────────────────────
-function loadScript(src) {
-    return new Promise((res, rej) => {
-        const s = document.createElement('script');
-        s.src = src; s.onload = res; s.onerror = rej;
-        document.head.appendChild(s);
-    });
-}
-async function ensurePeerJS() {
-    if (typeof Peer !== 'undefined') return true;
-    for (const cdn of PEERJS_CDNS) {
-        try { log(`Loading PeerJS from ${new URL(cdn).hostname}…`); await loadScript(cdn); if (typeof Peer !== 'undefined') { log('PeerJS loaded ✓','ok'); return true; } }
-        catch (e) { log(`CDN failed: ${new URL(cdn).hostname}`, 'err'); }
-    }
-    return false;
-}
+                    <!-- Right Controls -->
+                    <div class="flex items-center gap-3">
+                        <button onclick="toggleFullscreen()" class="text-slate-400 hover:text-white transition"><i data-lucide="maximize" class="w-5 h-5"></i></button>
+                    </div>
+                </div>
+            </div>
 
-// ─── Init ────────────────────────────────────────────────────────
-window.onload = () => {
-    lucide.createIcons();
-    loadProfile();
-    startQuotes();
-    const p = new URLSearchParams(location.search);
-    if (p.get('join')) { switchMode('join'); document.getElementById('join-id-input').value = p.get('join'); }
-    ensurePeerJS(); // preload
-};
-function startQuotes() {
-    let i = 0;
-    setInterval(() => {
-        const el = document.getElementById('quote-text'); if (!el) return;
-        i = (i+1) % quotes.length;
-        el.classList.remove('quote-fade'); void el.offsetWidth;
-        el.textContent = quotes[i]; el.classList.add('quote-fade');
-    }, 8000);
-}
-function loadProfile() {
-    const s = localStorage.getItem('nw_profile'); if (!s) { selectAvatar('👾','bg-indigo-600',true); pickAvatar('👾','bg-indigo-600'); return; }
-    const p = JSON.parse(s);
-    document.getElementById('username-input').value = p.name || '';
-    document.getElementById('modal-username').value = p.name || '';
-    selectAvatar(p.avatar||'👾', p.color||'bg-indigo-600', true);
-    pickAvatar(p.avatar||'👾', p.color||'bg-indigo-600');
-    apiKey = p.apiKey || ''; document.getElementById('ai-api-key').value = apiKey;
-}
+            <!-- Right: Chat & Sidebar (Responsive) -->
+            <div id="chat-sidebar" class="fixed inset-y-0 right-0 z-30 w-80 bg-[#151923] border-l border-slate-800 flex flex-col transition-transform duration-300 transform translate-x-full lg:translate-x-0 lg:static">
+                <!-- Mobile Close Button -->
+                <button onclick="toggleMobileChat()" class="lg:hidden absolute top-3 right-3 p-2 text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+                
+                <!-- Sidebar Tabs -->
+                <div class="flex border-b border-slate-800 mt-10 lg:mt-0">
+                    <button onclick="switchTab('chat')" id="tab-chat" class="tab-btn active w-1/2">Chat</button>
+                    <button onclick="switchTab('users')" id="tab-users" class="tab-btn inactive w-1/2 flex items-center justify-center gap-1">Users <span id="user-count" class="text-[9px] bg-slate-800 px-1.5 py-0.5 rounded-full text-slate-400">1</span></button>
+                </div>
+                
+                <!-- Chat View -->
+                <div id="view-chat" class="flex-1 flex flex-col overflow-hidden bg-[#0b0e14]">
+                    <div id="chat-container" class="flex-1 overflow-y-auto p-4 space-y-3">
+                        <div class="text-center text-[10px] text-slate-600 my-4 uppercase tracking-widest font-bold">Room Created</div>
+                    </div>
+                    <!-- Chat Interactions -->
+                    <div class="p-3 bg-[#151923] border-t border-slate-800 relative">
+                        <div class="flex gap-2 mb-3 overflow-x-auto no-scrollbar pb-1">
+                            <button onclick="sendEmoji('👋')" class="text-xl hover:scale-110 transition">👋</button>
+                            <button onclick="sendEmoji('😂')" class="text-xl hover:scale-110 transition">😂</button>
+                            <button onclick="sendEmoji('🔥')" class="text-xl hover:scale-110 transition">🔥</button>
+                            <button onclick="sendEmoji('😮')" class="text-xl hover:scale-110 transition">😮</button>
+                            <button onclick="sendEmoji('❤️')" class="text-xl hover:scale-110 transition">❤️</button>
+                            <div class="w-px h-6 bg-slate-700 mx-1"></div>
+                            <button onclick="askAI('Suggest a movie')" class="whitespace-nowrap text-[10px] bg-purple-500/10 text-purple-300 px-2.5 py-1 rounded-full border border-purple-500/20 hover:bg-purple-500/20 transition">✨ Idea</button>
+                        </div>
+                        <form onsubmit="sendChat(event)" class="relative">
+                            <input id="chat-input" type="text" placeholder="Type a message..." class="w-full bg-[#0b0e14] border border-slate-700 rounded-xl py-3 pl-4 pr-10 text-xs text-white focus:border-indigo-500 outline-none transition placeholder-slate-600">
+                            <button type="submit" class="absolute right-2 top-2.5 text-slate-400 hover:text-indigo-500"><i data-lucide="send-horizontal" class="w-5 h-5"></i></button>
+                        </form>
+                    </div>
+                </div>
 
-// ─── Login UI ────────────────────────────────────────────────────
-function switchMode(m) {
-    S.mode = m;
-    const on  = 'py-2 text-xs font-bold rounded-lg bg-indigo-600 text-white';
-    const off = 'py-2 text-xs font-bold rounded-lg text-slate-400 hover:text-white hover:bg-slate-800';
-    document.getElementById('btn-mode-create').className = m==='create'?on:off;
-    document.getElementById('btn-mode-join').className   = m==='join'  ?on:off;
-    document.getElementById('action-btn').textContent    = m==='create'?'Create Room':'Join Room';
-    document.getElementById('create-group').classList.toggle('hidden', m!=='create');
-    document.getElementById('join-group').classList.toggle('hidden',   m!=='join');
-    lucide.createIcons();
-}
-function fillRandom() { document.getElementById('create-id-input').value = genId(); }
-function selectAvatar(av, col, login=false) {
-    if (!login) return;
-    S.avatar=av; S.color=col;
-    document.querySelectorAll('.avatar-option').forEach(el => el.classList.toggle('selected', el.textContent.trim()===av));
-}
-function pickAvatar(av, col) {
-    S.avatar=av; S.color=col;
-    const p=document.getElementById('modal-avatar-preview');
-    p.textContent=av; p.className=`w-14 h-14 rounded-full ${col} flex items-center justify-center text-2xl`;
-}
+                <!-- Users View -->
+                <div id="view-users" class="flex-1 hidden overflow-y-auto p-4 bg-[#0b0e14]">
+                    <h3 class="text-xs font-bold text-slate-500 uppercase mb-4 tracking-widest">Participants</h3>
+                    <div id="user-list-container" class="space-y-2"></div>
+                </div>
+            </div>
+        </main>
+    </div>
 
-function setStatus(msg, type='inf') {
-    document.getElementById('status-box').classList.remove('hidden');
-    document.getElementById('status-msg').textContent = msg;
-    document.getElementById('status-msg').className = `text-xs font-medium ${type==='err'?'text-red-400':type==='ok'?'text-emerald-400':'text-slate-400'}`;
-    document.getElementById('spinner').classList.toggle('hidden', type==='err'||type==='ok');
-    log(msg, type);
-}
-function resetUI(errMsg='') {
-    const btn=document.getElementById('action-btn');
-    btn.disabled=false; btn.textContent=S.mode==='create'?'Create Room':'Join Room';
-    document.getElementById('spinner').classList.add('hidden');
-    if (errMsg) { setStatus(errMsg,'err'); toast(errMsg,'error'); document.getElementById('retry-btn').classList.remove('hidden'); lucide.createIcons(); }
-}
-
-// ─── Main entry ──────────────────────────────────────────────────
-async function handleStart() {
-    const name = document.getElementById('username-input').value.trim();
-    if (!name) return toast('Enter a display name','error');
-    S.username = name;
-    localStorage.setItem('nw_profile', JSON.stringify({name, avatar:S.avatar, color:S.color, apiKey}));
-
-    document.getElementById('action-btn').disabled = true;
-    document.getElementById('action-btn').textContent = 'Connecting…';
-    document.getElementById('retry-btn').classList.add('hidden');
-    document.getElementById('dbg').innerHTML = '';
-    setStatus('Loading PeerJS…');
-
-    if (!await ensurePeerJS()) { resetUI('Failed to load PeerJS library.'); return; }
-
-    if (peer) { try { peer.destroy(); } catch(e){} peer=null; }
-    connections=[]; hostConn=null; retryCount=0; iceIdx=0;
-
-    if (S.mode==='create') {
-        S.id = (document.getElementById('create-id-input').value.trim().replace(/[^a-zA-Z0-9-_]/g,'')||genId());
-        S.isCoHost=true; S.hostOnly=false; S.isLocked=false; S.targetHostId=null;
-        initPeer(S.id, null);
-    } else {
-        const hid = document.getElementById('join-id-input').value.trim().replace(/[^a-zA-Z0-9-_]/g,'');
-        if (!hid) { resetUI('Enter a Room ID'); return; }
-        S.id = genId(); S.targetHostId = hid;
-        initPeer(S.id, hid);
-    }
-}
-
-// ─── PeerJS init ─────────────────────────────────────────────────
-function makePeerConfig(iceConfig) {
-    // Always use peerjs cloud signaling; swap only the ICE servers
-    return {
-        host: '0.peerjs.com', port: 443, path: '/', secure: true,
-        debug: 1,
-        config: iceConfig
-    };
-}
-
-function initPeer(myId, targetHostId) {
-    const cfg = makePeerConfig(ICE_CONFIGS[iceIdx]);
-    setStatus(`Connecting… (ICE profile ${iceIdx+1}/${ICE_CONFIGS.length})`);
-    log(`ICE[${iceIdx}]: ${JSON.stringify(ICE_CONFIGS[iceIdx].iceServers?.map(s=>s.urls)).slice(0,80)}…`);
-
-    try { peer = new Peer(myId, cfg); }
-    catch(e) { log('new Peer() threw: '+e.message,'err'); tryNextIce(myId, targetHostId, e.message); return; }
-
-    // Signaling server timeout (8 s)
-    const sigTimeout = setTimeout(() => {
-        if (!peer?.open) { log('signaling timeout','err'); tryNextIce(myId, targetHostId, 'Signaling server timeout'); }
-    }, 8000);
-
-    peer.on('open', id => {
-        clearTimeout(sigTimeout);
-        log(`peer.open ✓  id=${id}`, 'ok');
-        setStatus('Signaling OK — opening data channel…');
-
-        if (targetHostId) {
-            connectToHost(targetHostId);
-        } else {
-            onHostReady(id);
+    <script>
+        // --- CONFIG & STATE ---
+        const generateId = () => Math.random().toString(36).substring(2, 8);
+        let peer;
+        let connections = []; // For Host
+        let hostConn = null;  // For Guest
+        let isSyncing = false; // Lock to prevent loop
+        let apiKey = ""; // AI Key
+        let connTimeout = null;
+        let userList = [];
+        const quotes = [
+            "Watch together. No lag. No limits.", "Tonight, we’re not alone.", "Turn loneliness into togetherness.", 
+            "Distance shouldn’t pause the movie.", "Press play. Feel close.", "Together, even miles apart.", 
+            "Same screen. Same moment.", "Turn distance into togetherness."
+        ];
+        
+        // Sound Effect
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playNotificationSound() {
+            if(audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(500, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(1000, audioCtx.currentTime + 0.1);
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.1);
         }
-    });
 
-    peer.on('connection', conn => {
-        if (S.mode!=='create') return;
-        if (S.isLocked) { conn.on('open',()=>{conn.send({type:'error',msg:'Room locked.'});setTimeout(()=>conn.close(),500);}); return; }
-        if (connections.length>=S.maxUsers) { conn.on('open',()=>{conn.send({type:'error',msg:'Room full.'});setTimeout(()=>conn.close(),500);}); return; }
-        connections.push(conn);
-        setupConn(conn);
-        setTimeout(()=>{ if(conn.open){ conn.send({type:'sync-full',video:S.video,hostOnly:S.hostOnly,isLocked:S.isLocked}); broadcastUserList(); } },1000);
-    });
+        const state = {
+            mode: 'create', // create | join
+            id: null,
+            username: 'Guest',
+            avatar: '👾',
+            color: 'bg-indigo-600',
+            hostOnly: false,
+            isLocked: false,
+            maxUsers: 10,
+            isCoHost: false, 
+            video: { type: null, src: null, time: 0, state: 'paused', speed: 1.0 },
+            ytPlayer: null
+        };
 
-    peer.on('error', err => {
-        clearTimeout(sigTimeout);
-        log(`peer error: ${err.type}`, 'err');
-        if (err.type==='unavailable-id') { resetUI('Room ID taken. Try another.'); return; }
-        if (err.type==='peer-unavailable') {
-            if (retryCount < 3) { retryCount++; setStatus(`Host not found. Retry ${retryCount}/3…`); setTimeout(()=>connectToHost(targetHostId||S.targetHostId),2000); }
-            else resetUI('Host not found. Is the Room ID correct?');
-            return;
+        // --- INIT ---
+        window.onload = () => {
+            lucide.createIcons();
+            loadProfile();
+            startQuoteTicker();
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            if(urlParams.get('join')) {
+                switchMode('join');
+                document.getElementById('join-id-input').value = urlParams.get('join');
+            }
+        };
+
+        function startQuoteTicker() {
+            let idx = 0;
+            setInterval(() => {
+                idx = (idx + 1) % quotes.length;
+                const el = document.getElementById('quote-text');
+                if(el) {
+                    el.classList.remove('quote-fade');
+                    void el.offsetWidth; // reflow
+                    el.innerText = quotes[idx];
+                    el.classList.add('quote-fade');
+                }
+            }, 8000);
         }
-        tryNextIce(myId, targetHostId, err.type);
-    });
 
-    peer.on('disconnected', () => { log('peer disconnected, reconnecting…','wrn'); try { peer.reconnect(); } catch(e){} });
-}
-
-function tryNextIce(myId, targetHostId, reason) {
-    if (peer) { try { peer.destroy(); } catch(e){} peer=null; }
-    iceIdx++;
-    if (iceIdx < ICE_CONFIGS.length) {
-        log(`Switching to ICE profile ${iceIdx+1} (${reason})`, 'wrn');
-        setStatus(`${reason} — trying backup relay…`);
-        setTimeout(()=>initPeer(myId, targetHostId), 1500);
-    } else {
-        resetUI('All connection methods failed. Check your network or firewall.');
-    }
-}
-
-// ─── Host ready ──────────────────────────────────────────────────
-function onHostReady(id) {
-    document.getElementById('host-settings-group').classList.remove('hidden');
-    userList = [{id, username:S.username, avatar:S.avatar, color:S.color, isCoHost:true}];
-    enterApp(id); updateUserListUI();
-}
-
-// ─── Guest: connect to host ──────────────────────────────────────
-function connectToHost(hostId) {
-    if (!peer?.open) { log('peer not ready, waiting…','wrn'); setTimeout(()=>connectToHost(hostId),500); return; }
-    clearTimeout(connTimeout);
-    setStatus(`Opening channel to "${hostId}"…`);
-    log(`peer.connect("${hostId}") ICE[${iceIdx}]`);
-
-    try {
-        hostConn = peer.connect(hostId, {
-            metadata: {username:S.username, avatar:S.avatar, color:S.color},
-            reliable: true,
-            // Serialization as json is more compat across browsers
-            serialization: 'json',
-        });
-    } catch(e) { log('peer.connect threw: '+e.message,'err'); resetUI('Connect failed: '+e.message); return; }
-
-    // Data channel open timeout — this is the one you were hitting
-    // We escalate the ICE profile instead of just retrying the same config
-    connTimeout = setTimeout(() => {
-        if (!hostConn?.open) {
-            log(`hostConn open timeout (ICE[${iceIdx}])`, 'err');
-            try { hostConn?.close(); } catch(e){}
-            hostConn = null;
-            if (iceIdx < ICE_CONFIGS.length - 1) {
-                // Destroy peer and reinit with stronger ICE (TURN relay)
-                if (peer) { try { peer.destroy(); } catch(e){} peer=null; }
-                iceIdx++;
-                log(`Escalating to ICE[${iceIdx}] with TURN relay…`, 'wrn');
-                setStatus(`NAT blocked. Switching to relay server… (${iceIdx}/${ICE_CONFIGS.length})`);
-                setTimeout(()=>initPeer(S.id, hostId), 1000);
-            } else if (retryCount < 2) {
-                retryCount++;
-                setStatus(`Timeout. Retry ${retryCount}/2 with full TURN relay…`);
-                setTimeout(()=>connectToHost(hostId), 1000);
+        function loadProfile() {
+            const saved = localStorage.getItem('zg_p2p_profile');
+            if(saved) {
+                const p = JSON.parse(saved);
+                document.getElementById('username-input').value = p.name;
+                document.getElementById('modal-username').value = p.name;
+                selectAvatar(p.avatar, p.color, true); // Update login avatar
+                selectModalAvatar(p.avatar, p.color); // Update modal avatar preview
+                apiKey = p.apiKey || "";
+                document.getElementById('ai-api-key').value = apiKey;
             } else {
-                resetUI('Cannot reach host. Try sharing the link on the same Wi-Fi, or ask host to retry.');
+                // Default selection
+                selectAvatar('👾', 'bg-indigo-600', true);
+                selectModalAvatar('👾', 'bg-indigo-600');
             }
         }
-    }, 14000); // 14s — enough for TURN negotiation
 
-    hostConn.on('open', () => {
-        clearTimeout(connTimeout); retryCount=0;
-        log('hostConn open ✓', 'ok');
-        addSysMsg('Joined room!');
-        setupConn(hostConn);
-        enterApp(hostId);
-        document.getElementById('my-peer-id').textContent = hostId;
-    });
-    hostConn.on('close', () => { toast('Host disconnected','error'); setTimeout(()=>location.reload(),2000); });
-    hostConn.on('error', e => {
-        clearTimeout(connTimeout);
-        log('hostConn error: '+e,'err');
-        if (iceIdx < ICE_CONFIGS.length - 1) { iceIdx++; if(peer){try{peer.destroy();}catch(e){} peer=null;} initPeer(S.id, hostId); }
-        else resetUI('Connection to host failed.');
-    });
-}
+        // --- LOGIN LOGIC ---
+        function switchMode(mode) {
+            state.mode = mode;
+            const btnCreate = document.getElementById('btn-mode-create');
+            const btnJoin = document.getElementById('btn-mode-join');
+            const actionBtn = document.getElementById('action-btn');
+            const createGroup = document.getElementById('create-input-group');
+            const joinGroup = document.getElementById('join-input-group');
 
-// ─── Shared connection setup ─────────────────────────────────────
-function setupConn(conn) {
-    if (S.mode==='create' && conn.metadata) {
-        const {username,avatar,color}=conn.metadata;
-        userList.push({id:conn.peer,username,avatar,color,isCoHost:false});
-        broadcastUserList();
-        const msg=`${username} joined`;
-        broadcast({type:'system',msg}); addSysMsg(msg); ping();
-    }
-    conn.on('data', d=>handleData(d,conn));
-    conn.on('close', ()=>{
-        if (S.mode==='create') {
-            connections=connections.filter(c=>c!==conn);
-            const i=userList.findIndex(u=>u.id===conn.peer);
-            if (i!==-1) { const [u]=userList.splice(i,1); broadcastUserList(); const msg=`${u.username} left`; addSysMsg(msg); broadcast({type:'system',msg}); }
+            if(mode === 'create') {
+                btnCreate.className = "py-2 text-xs font-bold rounded-lg transition-all bg-indigo-600 text-white shadow-lg";
+                btnJoin.className = "py-2 text-xs font-bold rounded-lg transition-all text-slate-400 hover:text-white hover:bg-slate-800";
+                
+                actionBtn.innerText = "Create Room";
+                createGroup.classList.remove('hidden');
+                joinGroup.classList.add('hidden');
+            } else {
+                btnJoin.className = "py-2 text-xs font-bold rounded-lg transition-all bg-indigo-600 text-white shadow-lg";
+                btnCreate.className = "py-2 text-xs font-bold rounded-lg transition-all text-slate-400 hover:text-white hover:bg-slate-800";
+
+                actionBtn.innerText = "Join Room";
+                createGroup.classList.add('hidden');
+                joinGroup.classList.remove('hidden');
+            }
+            lucide.createIcons();
         }
-    });
-}
 
-function enterApp(id) {
-    document.getElementById('login-view').classList.add('hidden');
-    document.getElementById('app-view').classList.remove('hidden');
-    if (S.mode==='create') document.getElementById('my-peer-id').textContent=id;
-    updateProfileUI(); initYT();
-}
-function updateProfileUI() {
-    const el=document.getElementById('user-avatar-display');
-    el.textContent=S.avatar; el.className=`w-8 h-8 rounded-full ${S.color} flex items-center justify-center text-sm cursor-pointer`;
-}
+        function fillRandomId() {
+            document.getElementById('create-id-input').value = generateId();
+        }
 
-// ─── User list ───────────────────────────────────────────────────
-function broadcastUserList() { broadcast({type:'user-list',list:userList}); updateUserListUI(); }
-function updateUserListUI() {
-    const c=document.getElementById('user-list-container');
-    document.getElementById('user-count').textContent=userList.length;
-    c.innerHTML='';
-    userList.forEach(u=>{
-        const isMe=u.id===(S.mode==='create'?S.id:peer?.id);
-        const role=u.isCoHost?(u.id===S.id&&S.mode==='create'?'HOST':'CO-HOST'):'USER';
-        let ctrl='';
-        if (S.mode==='create'&&!isMe) ctrl=`<div class="flex gap-2 opacity-0 group-hover:opacity-100 transition"><button onclick="promoteUser('${u.id}')" class="text-indigo-400 hover:text-white text-xs">↑</button><button onclick="kickUser('${u.id}')" class="text-red-400 hover:text-white text-xs">✕</button></div>`;
-        const d=document.createElement('div');
-        d.className='flex items-center justify-between p-2 rounded-lg hover:bg-slate-800/50 group';
-        d.innerHTML=`<div class="flex items-center gap-3"><div class="w-8 h-8 rounded-full ${u.color} flex items-center justify-center text-sm">${u.avatar}</div><div><p class="text-xs font-bold text-slate-200">${u.username}${isMe?' <span class="text-[9px] bg-slate-700 px-1 rounded text-slate-400">YOU</span>':''}</p><p class="text-[9px] ${u.isCoHost?'text-indigo-400':'text-slate-500'}">${role}</p></div></div>${ctrl}`;
-        c.appendChild(d);
-    });
-    lucide.createIcons();
-}
-function kickUser(id){const c=connections.find(c=>c.peer===id);if(c){c.send({type:'error',msg:'Kicked.'});setTimeout(()=>c.close(),500);}}
-function promoteUser(id){const u=userList.find(u=>u.id===id);if(!u)return;u.isCoHost=!u.isCoHost;broadcastUserList();const c=connections.find(c=>c.peer===id);if(c)c.send({type:'promote',val:u.isCoHost});toast(`Updated ${u.username}`,'success');}
+        function selectAvatar(av, col, isLogin = false) {
+            if(isLogin) {
+                state.avatar = av; state.color = col;
+                // Update login screen visual
+                document.querySelectorAll('.avatar-option').forEach(el => el.classList.remove('selected'));
+                // Basic matching for demo purposes
+                const options = document.querySelectorAll('.avatar-option');
+                for(let opt of options) {
+                    if(opt.innerText === av) opt.classList.add('selected');
+                }
+            }
+        }
 
-// ─── Data ────────────────────────────────────────────────────────
-function handleData(data,senderConn) {
-    if(data.type==='error'){alert(data.msg);location.reload();return;}
-    if(data.type==='chat'){addChat(data.user,data.msg,data.avatar,data.color);ping();if(S.mode==='create')broadcast(data,senderConn);if(document.getElementById('chat-sidebar').classList.contains('translate-x-full'))document.getElementById('chat-badge').classList.remove('hidden');}
-    else if(data.type==='system'){addSysMsg(data.msg);if(S.mode==='create')broadcast(data,senderConn);}
-    else if(data.type==='video-action'){if(S.mode==='create'&&S.hostOnly&&!data.isHost)return;applyVid(data.action,data.val);if(S.mode==='create')broadcast(data,senderConn);}
-    else if(data.type==='sync-full'){S.hostOnly=data.hostOnly;updateLockUI(data.isLocked);if(data.video?.type==='youtube'){document.getElementById('url-input').value=`https://youtu.be/${data.video.src}`;S.video=data.video;loadVideo(true);}else if(data.video?.type==='file')addSysMsg('Host is watching a local file — load the same file.');if(data.video?.speed)changeSpeed(data.video.speed,true);}
-    else if(data.type==='settings'){if(data.key==='hostOnly')S.hostOnly=data.val;if(data.key==='isLocked')updateLockUI(data.val);}
-    else if(data.type==='user-list'){userList=data.list;updateUserListUI();}
-    else if(data.type==='promote'){S.isCoHost=data.val;toast(S.isCoHost?'You are Co-Host':'Co-Host removed','info');}
-    else if(data.type==='update-profile'){if(S.mode==='create'){const u=userList.find(u=>u.id===senderConn.peer);if(u){u.username=data.username;u.avatar=data.avatar;u.color=data.color;broadcastUserList();}}}
-}
-function broadcast(data,exclude=null){connections.forEach(c=>{if(c!==exclude&&c.open)c.send(data);});}
+        function selectModalAvatar(av, col) {
+            // Update state
+            state.avatar = av; state.color = col;
+            
+            // Update Modal UI
+            const preview = document.getElementById('modal-avatar-preview');
+            preview.innerText = av;
+            preview.className = `w-16 h-16 rounded-full flex items-center justify-center text-3xl shadow-lg border-2 border-slate-700 transition-all ${col}`;
+            
+            // Store temporarily in hidden fields if we want cancel logic, 
+            // but for this simple version we update state directly.
+        }
 
-// ─── Video ───────────────────────────────────────────────────────
-function initYT(){if(!window.YT){const t=document.createElement('script');t.src='https://www.youtube.com/iframe_api';document.body.appendChild(t);}}
-function loadVideo(isRemote=false){const url=document.getElementById('url-input').value;const id=ytId(url);if(!id)return;S.video.type='youtube';S.video.src=id;activatePlayer('youtube');if(!S.ytPlayer){S.ytPlayer=new YT.Player('youtube-player',{height:'100%',width:'100%',videoId:id,playerVars:{autoplay:1,controls:0,rel:0},events:{onStateChange:onYTState}});}else{S.ytPlayer.loadVideoById(id);}if(!isRemote)sendVid('change',{type:'youtube',src:id});}
-function handleFile(input){const f=input.files[0];if(!f)return;const url=URL.createObjectURL(f);if(S.ytPlayer?.stopVideo)S.ytPlayer.stopVideo();S.video.type='file';activatePlayer('html5');const v=document.getElementById('html5-player');v.src=url;v.playbackRate=S.video.speed;v.onplay=()=>sendVid('play',v.currentTime);v.onpause=()=>sendVid('pause',v.currentTime);v.onseeked=()=>sendVid('seek',v.currentTime);toast('File loaded','success');if(S.mode==='create')broadcast({type:'video-action',action:'change',val:{type:'file'}});input.value='';}
-function onYTState(e){if(isSyncing)return;if(e.data==YT.PlayerState.PLAYING)sendVid('play',S.ytPlayer.getCurrentTime());if(e.data==YT.PlayerState.PAUSED)sendVid('pause',S.ytPlayer.getCurrentTime());}
-function sendVid(action,val){if(isSyncing)return;if(S.mode!=='create'&&S.hostOnly&&!S.isCoHost){toast('Controls locked','error');return;}const d={type:'video-action',action,val,isHost:S.mode==='create'||S.isCoHost};if(action==='play')S.video.state='playing';if(action==='pause')S.video.state='paused';if(action==='seek')S.video.time=val;if(action==='speed')S.video.speed=val;if(S.mode==='create')broadcast(d);else if(hostConn?.open)hostConn.send(d);}
-function applyVid(action,val){isSyncing=true;const yt=S.ytPlayer,h5=document.getElementById('html5-player');if(action==='change'){if(val.type==='youtube'){document.getElementById('url-input').value=`https://youtu.be/${val.src}`;loadVideo(true);}else addSysMsg('Host switched to local file.');}else if(action==='speed')changeSpeed(val,true);else if(S.video.type==='youtube'&&yt?.getPlayerState){if(action==='play'){if(Math.abs(yt.getCurrentTime()-val)>1)yt.seekTo(val);yt.playVideo();}if(action==='pause'){yt.seekTo(val);yt.pauseVideo();}if(action==='seek')yt.seekTo(val);}else if(S.video.type==='file'){if(action==='play'){if(Math.abs(h5.currentTime-val)>1)h5.currentTime=val;h5.play().catch(()=>{});}if(action==='pause'){h5.pause();h5.currentTime=val;}if(action==='seek')h5.currentTime=val;}setTimeout(()=>{isSyncing=false;},500);}
-function seekRelative(s){if(S.mode!=='create'&&S.hostOnly&&!S.isCoHost){toast('Controls locked','error');return;}let t=0;if(S.video.type==='youtube'&&S.ytPlayer)t=S.ytPlayer.getCurrentTime();else if(S.video.type==='file')t=document.getElementById('html5-player').currentTime;const n=Math.max(0,t+s);sendVid('seek',n);if(S.video.type==='youtube')S.ytPlayer.seekTo(n);else document.getElementById('html5-player').currentTime=n;}
-function activatePlayer(type){document.getElementById('placeholder').classList.add('hidden');const h5=document.getElementById('html5-player'),yt=document.getElementById('youtube-player');if(type==='youtube'){h5.classList.add('hidden');h5.pause();yt.style.display='block';}else{yt.style.display='none';if(S.ytPlayer?.pauseVideo)S.ytPlayer.pauseVideo();h5.classList.remove('hidden');}}
-function ytId(url){const m=url.match(/(?:youtu\.be\/|watch\?v=|embed\/|v\/)([^#&?]{11})/);return m?m[1]:null;}
-function changeSpeed(val,isRemote=false){const s=parseFloat(val);S.video.speed=s;document.getElementById('speed-select').value=s;document.getElementById('html5-player').playbackRate=s;if(S.ytPlayer?.setPlaybackRate)S.ytPlayer.setPlaybackRate(s);if(!isRemote)sendVid('speed',s);}
-function handleSubtitle(input){const f=input.files[0];if(!f)return;const r=new FileReader();r.onload=e=>{let c=e.target.result;if(f.name.endsWith('.srt'))c='WEBVTT\n\n'+c.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g,'$1.$2');document.getElementById('player-track').src=URL.createObjectURL(new Blob([c],{type:'text/vtt'}));const tt=document.getElementById('html5-player').textTracks[0];if(tt)tt.mode='showing';toast('Subtitles loaded','success');};r.readAsText(f);}
+        async function handleStart() {
+            const name = document.getElementById('username-input').value.trim();
+            if(!name) return toast("Please enter a name", "error");
+            state.username = name;
+            
+            localStorage.setItem('zg_p2p_profile', JSON.stringify({
+                name, avatar: state.avatar, color: state.color, apiKey
+            }));
 
-// ─── Chat & AI ───────────────────────────────────────────────────
-async function askAI(q){const p=q||document.getElementById('chat-input').value.replace('@ai','').trim();if(!p)return;if(!apiKey)return toast('API Key needed','error');sendChat(null,p);toast('Thinking…','info');try{const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:'Short fun response: '+p}]}]})});const d=await r.json();const t=d.candidates?.[0]?.content?.parts?.[0]?.text||'Failed.';const m={type:'chat',msg:t,user:'AI',avatar:'✨',color:'bg-purple-600'};addChat('AI',t,'✨','bg-purple-600');ping();if(S.mode==='create')broadcast(m);else if(hostConn?.open)hostConn.send(m);}catch(e){toast('AI Error','error');}}
-function sendChat(e,manual=null){if(e)e.preventDefault();const inp=document.getElementById('chat-input');const msg=manual||inp.value.trim();if(!msg)return;if(msg.startsWith('@ai')&&!manual){askAI(msg.replace('@ai','').trim());inp.value='';return;}const d={type:'chat',msg,user:S.username,avatar:S.avatar,color:S.color};addChat(S.username,msg,S.avatar,S.color,true);ping();if(S.mode==='create')broadcast(d);else if(hostConn?.open)hostConn.send(d);inp.value='';}
-function sendEmoji(e){sendChat(null,e);}
-function addChat(user,msg,avatar,color,isMe=false){const b=document.getElementById('chat-container'),d=document.createElement('div');d.className=`flex gap-3 ${isMe?'flex-row-reverse':''}`;d.innerHTML=`<div class="w-8 h-8 rounded-full ${color} flex items-center justify-center text-xs shrink-0 text-white">${avatar}</div><div class="${isMe?'bg-indigo-600 text-white':'bg-[#1f2937] text-slate-200'} p-3 rounded-2xl text-sm max-w-[85%]"><p class="text-[9px] opacity-70 mb-1 font-bold uppercase">${user}</p><p>${msg}</p></div>`;b.appendChild(d);b.scrollTop=b.scrollHeight;}
-function addSysMsg(t){const b=document.getElementById('chat-container'),d=document.createElement('div');d.className='text-center text-[10px] text-slate-500 my-2';d.textContent=t;b.appendChild(d);b.scrollTop=b.scrollHeight;}
+            const btn = document.getElementById('action-btn');
+            btn.disabled = true;
+            btn.innerText = "Connecting...";
+            document.getElementById('status-msg').innerText = "Establishing Secure Connection...";
 
-// ─── Utils ───────────────────────────────────────────────────────
-function toggleSettings(){const m=document.getElementById('settings-modal');if(m.open)m.close();else m.showModal();}
-function toggleMobileChat(){const s=document.getElementById('chat-sidebar');if(s.classList.contains('translate-x-full')){s.classList.remove('translate-x-full');document.getElementById('chat-badge').classList.add('hidden');}else s.classList.add('translate-x-full');}
-function toggleFullscreen(){const e=document.getElementById('video-box');if(!document.fullscreenElement)e.requestFullscreen().catch(()=>{});else document.exitFullscreen();}
-function switchTab(t){const cc=document.getElementById('view-chat'),cu=document.getElementById('view-users'),tc=document.getElementById('tab-chat'),tu=document.getElementById('tab-users');if(t==='chat'){cc.classList.remove('hidden');cu.classList.add('hidden');tc.className='w-1/2 py-3 text-xs font-bold text-indigo-400 border-b-2 border-indigo-500';tu.className='w-1/2 py-3 text-xs font-bold text-slate-500 flex items-center justify-center gap-1';}else{cc.classList.add('hidden');cu.classList.remove('hidden');tu.className='w-1/2 py-3 text-xs font-bold text-indigo-400 border-b-2 border-indigo-500';tc.className='w-1/2 py-3 text-xs font-bold text-slate-500';}}
-function saveSettings(){const n=document.getElementById('modal-username').value;apiKey=document.getElementById('ai-api-key').value;if(n)S.username=n;localStorage.setItem('nw_profile',JSON.stringify({name:S.username,avatar:S.avatar,color:S.color,apiKey}));if(S.mode==='create'){const me=userList.find(u=>u.id===S.id);if(me){me.username=n;me.avatar=S.avatar;me.color=S.color;}broadcastUserList();updateProfileUI();}else if(hostConn?.open){hostConn.send({type:'update-profile',username:S.username,avatar:S.avatar,color:S.color});updateProfileUI();}toggleSettings();toast('Saved ✓','success');}
-function toggleHostOnly(){if(S.mode!=='create')return;S.hostOnly=!S.hostOnly;const b=document.getElementById('btn-host-only'),k=b.firstElementChild;b.classList.toggle('bg-indigo-600',S.hostOnly);b.classList.toggle('bg-slate-700',!S.hostOnly);k.classList.toggle('translate-x-5',S.hostOnly);broadcast({type:'settings',key:'hostOnly',val:S.hostOnly});}
-function toggleRoomLock(){if(S.mode!=='create')return;S.isLocked=!S.isLocked;updateLockUI(S.isLocked);const b=document.getElementById('btn-lock-room'),k=b.firstElementChild;b.classList.toggle('bg-indigo-600',S.isLocked);b.classList.toggle('bg-slate-700',!S.isLocked);k.classList.toggle('translate-x-5',S.isLocked);broadcast({type:'settings',key:'isLocked',val:S.isLocked});}
-function updateLockUI(l){document.getElementById('room-locked-indicator').classList.toggle('hidden',!l);}
-function copyId(){const id=document.getElementById('my-peer-id').textContent;if(id==='...')return;navigator.clipboard.writeText(id).then(()=>toast('Copied! Share this ID ✓','success'));}
-function toast(msg,type='info'){const c=document.getElementById('toast-container'),d=document.createElement('div');const cl=type==='success'?'bg-emerald-900/90 border-emerald-500/50':type==='error'?'bg-red-900/90 border-red-500/50':'bg-slate-900/90 border-slate-700';d.className=`${cl} border text-white px-4 py-3 rounded-xl text-xs font-bold shadow-2xl backdrop-blur flex items-center gap-2`;d.textContent=(type==='success'?'✓ ':type==='error'?'✕ ':'')+msg;c.appendChild(d);setTimeout(()=>d.remove(),3500);}
-</script>
+            // Destroy existing peer if any
+            if (peer) { peer.destroy(); peer = null; }
+
+            if(state.mode === 'create') {
+                const inputId = document.getElementById('create-id-input').value.trim().replace(/[^a-zA-Z0-9-_]/g, '').toLowerCase();
+                state.id = inputId || generateId();
+                state.hostOnly = false;
+                state.isLocked = false;
+                state.isCoHost = true; 
+                initPeer(state.id);
+            } else {
+                const inputId = document.getElementById('join-id-input').value.trim().replace(/[^a-zA-Z0-9-_]/g, '').toLowerCase();
+                if(!inputId) {
+                    resetLoginUI("Enter a Host ID to join.");
+                    return;
+                }
+                state.id = generateId(); 
+                initPeer(state.id, inputId);
+            }
+        }
+
+        function resetLoginUI(msg = "") {
+            const btn = document.getElementById('action-btn');
+            btn.disabled = false;
+            btn.innerText = state.mode === 'create' ? "Create Room" : "Join Room";
+            document.getElementById('status-msg').innerText = "";
+            if(msg) toast(msg, "error");
+        }
+
+        // --- PEERJS LOGIC ---
+        function initPeer(myId, targetHostId = null) {
+            const cleanId = myId.replace(/[^a-zA-Z0-9-_]/g, '');
+            // explicit config for github pages / https
+            peer = new Peer(cleanId, {
+                debug: 2,
+                secure: true, 
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' }
+                    ]
+                }
+            });
+
+            peer.on('open', (id) => {
+                if(targetHostId) {
+                    connectToHost(targetHostId);
+                } else {
+                    enterApp(id);
+                    // setStatus("Hosting", "bg-indigo-500");
+                    document.getElementById('host-settings-group').classList.remove('hidden');
+                    userList = [{ id: id, username: state.username, avatar: state.avatar, color: state.color, isCoHost: true }];
+                    updateUserListUI();
+                }
+            });
+
+            peer.on('connection', (conn) => {
+                if (state.mode === 'create') {
+                    if (state.isLocked) {
+                        conn.on('open', () => { conn.send({ type: 'error', msg: "Room is Locked." }); setTimeout(() => conn.close(), 500); });
+                        return;
+                    }
+                    if (connections.length >= state.maxUsers) {
+                        conn.on('open', () => { conn.send({ type: 'error', msg: "Room is Full." }); setTimeout(() => conn.close(), 500); });
+                        return;
+                    }
+                }
+                connections.push(conn);
+                setupConnection(conn);
+                if(state.mode === 'create') {
+                    setTimeout(() => {
+                        if(conn.open) {
+                            conn.send({ type: 'sync-full', video: state.video, hostOnly: state.hostOnly, isLocked: state.isLocked });
+                            broadcastUserList(); 
+                        }
+                    }, 1000);
+                }
+            });
+
+            peer.on('error', (err) => {
+                console.error(err);
+                clearTimeout(connTimeout);
+                let msg = "Connection Error";
+                if(err.type === 'unavailable-id') msg = "ID taken. Try another.";
+                if(err.type === 'peer-unavailable') msg = "Host not found.";
+                toast(msg, "error");
+                resetLoginUI(msg);
+            });
+        }
+
+        function connectToHost(hostId) {
+            hostConn = peer.connect(hostId, {
+                metadata: { username: state.username, avatar: state.avatar, color: state.color },
+                reliable: true 
+            });
+            document.getElementById('status-msg').innerText = "Locating Host...";
+            
+            // Increased timeout to 15 seconds to handle network latency
+            connTimeout = setTimeout(() => {
+                if(!hostConn || !hostConn.open) {
+                    resetLoginUI("Connection timed out. Is Host online?");
+                    if(peer) {
+                        peer.destroy();
+                        peer = null;
+                    }
+                }
+            }, 15000);
+
+            hostConn.on('open', () => {
+                clearTimeout(connTimeout);
+                enterApp(hostId);
+                // setStatus("Connected", "bg-emerald-500"); // Removed to use header UI
+                addSystemMsg("Joined Room!");
+                setupConnection(hostConn);
+                document.getElementById('my-peer-id').innerText = hostId;
+            });
+            
+            hostConn.on('close', () => {
+                toast("Host Disconnected", "error");
+                setTimeout(() => location.reload(), 2000);
+            });
+            
+            hostConn.on('error', (e) => {
+                clearTimeout(connTimeout);
+                resetLoginUI("Could not connect to Host.");
+            });
+        }
+
+        function setupConnection(conn) {
+            if(state.mode === 'create' && conn.metadata) {
+                const { username, avatar, color } = conn.metadata;
+                userList.push({ id: conn.peer, username, avatar, color, isCoHost: false });
+                broadcastUserList();
+                const msg = `${username} joined`;
+                broadcast({ type: 'system', msg });
+                addSystemMsg(msg);
+                playNotificationSound();
+            }
+            conn.on('data', (data) => handleData(data, conn));
+            conn.on('close', () => {
+                if(state.mode === 'create') {
+                    connections = connections.filter(c => c !== conn);
+                    const userIdx = userList.findIndex(u => u.id === conn.peer);
+                    if(userIdx !== -1) {
+                        const user = userList[userIdx];
+                        userList.splice(userIdx, 1);
+                        broadcastUserList();
+                        const msg = `${user.username} left`;
+                        addSystemMsg(msg);
+                        broadcast({ type: 'system', msg });
+                    }
+                }
+            });
+        }
+
+        function enterApp(id) {
+            document.getElementById('login-view').classList.add('hidden');
+            document.getElementById('app-view').classList.remove('hidden');
+            if(state.mode === 'create') document.getElementById('my-peer-id').innerText = id;
+            updateProfileUI();
+            initYouTube();
+        }
+
+        function updateProfileUI() {
+            const el = document.getElementById('user-avatar-display');
+            el.innerText = state.avatar;
+            el.className = `w-9 h-9 rounded-full ${state.color} flex items-center justify-center font-bold text-sm shadow-inner cursor-pointer`;
+        }
+
+        // --- USER LIST ---
+        function broadcastUserList() { broadcast({ type: 'user-list', list: userList }); updateUserListUI(); }
+        function updateUserListUI() {
+            const container = document.getElementById('user-list-container');
+            document.getElementById('user-count').innerText = userList.length;
+            container.innerHTML = '';
+            userList.forEach(user => {
+                const isMe = user.id === (state.mode === 'create' ? state.id : peer.id);
+                const role = user.isCoHost ? (user.id === state.id && state.mode === 'create' ? 'HOST' : 'CO-HOST') : 'USER';
+                const roleColor = user.isCoHost ? 'text-indigo-400' : 'text-slate-500';
+                
+                let controls = '';
+                if(state.mode === 'create' && !isMe) {
+                    controls = `<div class="flex gap-2 opacity-0 group-hover:opacity-100 transition"><button onclick="promoteUser('${user.id}')" title="Promote" class="text-indigo-400 hover:text-white"><i data-lucide="shield-plus" class="w-4 h-4"></i></button><button onclick="kickUser('${user.id}')" title="Kick" class="text-red-400 hover:text-white"><i data-lucide="user-x" class="w-4 h-4"></i></button></div>`;
+                }
+                const div = document.createElement('div');
+                div.className = "flex items-center justify-between p-2 rounded-lg hover:bg-slate-800/50 group transition";
+                div.innerHTML = `<div class="flex items-center gap-3"><div class="w-8 h-8 rounded-full ${user.color} flex items-center justify-center text-sm font-bold shadow-sm">${user.avatar}</div><div><p class="text-xs font-bold text-slate-200 flex items-center gap-1">${user.username} ${isMe ? '<span class="text-[9px] bg-slate-700 px-1 rounded text-slate-400">YOU</span>' : ''}</p><p class="text-[9px] ${roleColor} font-medium">${role}</p></div></div>${controls}`;
+                container.appendChild(div);
+            });
+            lucide.createIcons();
+        }
+
+        function kickUser(userId) {
+            if(state.mode !== 'create') return;
+            const conn = connections.find(c => c.peer === userId);
+            if(conn) { conn.send({ type: 'error', msg: "Kicked by Host." }); setTimeout(() => conn.close(), 500); }
+        }
+        function promoteUser(userId) {
+            if(state.mode !== 'create') return;
+            const user = userList.find(u => u.id === userId);
+            if(user) {
+                user.isCoHost = !user.isCoHost; 
+                broadcastUserList(); 
+                const conn = connections.find(c => c.peer === userId);
+                if(conn) conn.send({ type: 'promote', val: user.isCoHost });
+                toast(`Updated ${user.username}`, 'success');
+            }
+        }
+
+        // --- CORE DATA HANDLING ---
+        function handleData(data, senderConn) {
+            if (data.type === 'error') { alert(data.msg); location.reload(); return; }
+            if (data.type === 'chat') {
+                addChat(data.user, data.msg, data.avatar, data.color);
+                playNotificationSound();
+                if(document.getElementById('chat-sidebar').classList.contains('closed')) document.getElementById('chat-badge').classList.remove('hidden');
+                if(state.mode === 'create') broadcast(data, senderConn);
+            }
+            else if (data.type === 'system') {
+                addSystemMsg(data.msg);
+                if(state.mode === 'create') broadcast(data, senderConn);
+            }
+            else if (data.type === 'video-action') {
+                if(state.mode === 'create' && state.hostOnly && !data.isHost) return;
+                applyVideoAction(data.action, data.val);
+                if(state.mode === 'create') broadcast(data, senderConn);
+            }
+            else if (data.type === 'sync-full') {
+                state.hostOnly = data.hostOnly;
+                updateLockUI(data.isLocked);
+                if(data.video.type === 'youtube') {
+                    document.getElementById('url-input').value = `https://youtu.be/${data.video.src}`;
+                    state.video = data.video;
+                    loadVideo(true);
+                } else if(data.video.type === 'file') {
+                    addSystemMsg("Host is watching a local file. Please load same file.");
+                }
+                if(data.video.speed) changeSpeed(data.video.speed, true);
+            }
+            else if (data.type === 'settings') {
+                if(data.key === 'hostOnly') state.hostOnly = data.val;
+                if(data.key === 'isLocked') updateLockUI(data.val);
+            }
+            else if (data.type === 'user-list') { userList = data.list; updateUserListUI(); }
+            else if (data.type === 'promote') { state.isCoHost = data.val; toast(state.isCoHost ? "You are now Co-Host" : "Co-Host removed", "info"); }
+            else if (data.type === 'update-profile') {
+                if (state.mode === 'create') {
+                    const u = userList.find(u => u.id === senderConn.peer);
+                    if (u) {
+                        u.username = data.username; u.avatar = data.avatar; u.color = data.color;
+                        broadcastUserList();
+                    }
+                }
+            }
+        }
+
+        function broadcast(data, excludeConn = null) {
+            connections.forEach(c => { if(c !== excludeConn && c.open) c.send(data); });
+        }
+
+        // --- VIDEO LOGIC ---
+        function initYouTube() {
+            if(!window.YT) { const tag = document.createElement('script'); tag.src = "https://www.youtube.com/iframe_api"; document.body.appendChild(tag); }
+        }
+        function loadVideo(isRemote = false) {
+            const url = document.getElementById('url-input').value;
+            const ytId = extractYouTubeId(url);
+            if(ytId) {
+                state.video.type = 'youtube'; state.video.src = ytId;
+                activatePlayer('youtube');
+                if(!state.ytPlayer) {
+                    state.ytPlayer = new YT.Player('youtube-player', {
+                        height: '100%', width: '100%', videoId: ytId,
+                        playerVars: { autoplay: 1, controls: 0, rel: 0 },
+                        events: { onStateChange: onPlayerStateChange }
+                    });
+                } else { state.ytPlayer.loadVideoById(ytId); }
+                if(!isRemote) sendVideoAction('change', { type: 'youtube', src: ytId });
+            }
+        }
+        function handleFile(input) {
+            const file = input.files[0]; if(!file) return;
+            const url = URL.createObjectURL(file);
+            if(state.ytPlayer && state.ytPlayer.stopVideo) state.ytPlayer.stopVideo();
+            state.video.type = 'file';
+            activatePlayer('html5');
+            const v = document.getElementById('html5-player');
+            v.src = url; v.playbackRate = state.video.speed;
+            v.onplay = () => sendVideoAction('play', v.currentTime);
+            v.onpause = () => sendVideoAction('pause', v.currentTime);
+            v.onseeked = () => sendVideoAction('seek', v.currentTime);
+            toast("Local file loaded.", "success");
+            if(state.mode === 'create') broadcast({ type: 'video-action', action: 'change', val: { type: 'file' }});
+            input.value = '';
+        }
+        function onPlayerStateChange(e) {
+            if(isSyncing) return;
+            if(e.data == YT.PlayerState.PLAYING) sendVideoAction('play', state.ytPlayer.getCurrentTime());
+            if(e.data == YT.PlayerState.PAUSED) sendVideoAction('pause', state.ytPlayer.getCurrentTime());
+        }
+        function sendVideoAction(action, val) {
+            if(isSyncing) return;
+            if(state.mode !== 'create' && state.hostOnly && !state.isCoHost) { toast("Host Locked Controls", "error"); return; }
+            const data = { type: 'video-action', action, val, isHost: state.mode === 'create' || state.isCoHost };
+            if(action === 'play') state.video.state = 'playing';
+            if(action === 'pause') state.video.state = 'paused';
+            if(action === 'seek') state.video.time = val;
+            if(action === 'speed') state.video.speed = val;
+            if(state.mode === 'create') broadcast(data); else if(hostConn && hostConn.open) hostConn.send(data);
+        }
+        function applyVideoAction(action, val) {
+            isSyncing = true;
+            const yt = state.ytPlayer; const h5 = document.getElementById('html5-player');
+            if(action === 'change') {
+                if(val.type === 'youtube') { document.getElementById('url-input').value = `https://youtu.be/${val.src}`; loadVideo(true); }
+                else if(val.type === 'file') { addSystemMsg("Host changed to Local File."); }
+            }
+            else if(action === 'speed') changeSpeed(val, true);
+            else if(state.video.type === 'youtube' && yt && yt.getPlayerState) {
+                if(action === 'play') { if(Math.abs(yt.getCurrentTime() - val) > 1) yt.seekTo(val); yt.playVideo(); }
+                if(action === 'pause') { yt.seekTo(val); yt.pauseVideo(); }
+                if(action === 'seek') yt.seekTo(val);
+            }
+            else if(state.video.type === 'file') {
+                if(action === 'play') { if(Math.abs(h5.currentTime - val) > 1) h5.currentTime = val; h5.play().catch(e=>{}); }
+                if(action === 'pause') { h5.pause(); h5.currentTime = val; }
+                if(action === 'seek') h5.currentTime = val;
+            }
+            setTimeout(() => { isSyncing = false; }, 500);
+        }
+        function seekRelative(seconds) {
+            if(state.mode !== 'create' && state.hostOnly && !state.isCoHost) { toast("Controls Locked", "error"); return; }
+            let current = 0;
+            if(state.video.type === 'youtube' && state.ytPlayer) current = state.ytPlayer.getCurrentTime();
+            else if(state.video.type === 'file') current = document.getElementById('html5-player').currentTime;
+            const newTime = Math.max(0, current + seconds);
+            sendVideoAction('seek', newTime);
+            // Apply locally immediately for responsiveness
+            if(state.video.type === 'youtube') state.ytPlayer.seekTo(newTime);
+            else if(state.video.type === 'file') document.getElementById('html5-player').currentTime = newTime;
+        }
+        function activatePlayer(type) {
+            document.getElementById('placeholder').classList.add('hidden');
+            const h5 = document.getElementById('html5-player'); const yt = document.getElementById('youtube-player');
+            if(type === 'youtube') { h5.classList.add('hidden'); h5.pause(); yt.style.display = 'block'; }
+            else { yt.style.display = 'none'; if(state.ytPlayer?.pauseVideo) state.ytPlayer.pauseVideo(); h5.classList.remove('hidden'); }
+        }
+        function extractYouTubeId(url) {
+            const match = url.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/);
+            return (match && match[2].length === 11) ? match[2] : null;
+        }
+        function changeSpeed(val, isRemote = false) {
+            const speed = parseFloat(val); state.video.speed = speed;
+            document.getElementById('speed-select').value = speed;
+            const h5 = document.getElementById('html5-player'); h5.playbackRate = speed;
+            if(state.ytPlayer?.setPlaybackRate) state.ytPlayer.setPlaybackRate(speed);
+            if(!isRemote) sendVideoAction('speed', speed);
+        }
+        function handleSubtitle(input) {
+            const file = input.files[0]; if(!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                let content = e.target.result;
+                if(file.name.endsWith('.srt')) content = "WEBVTT\n\n" + content.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
+                const blob = new Blob([content], {type: 'text/vtt'});
+                const url = URL.createObjectURL(blob);
+                document.getElementById('player-track').src = url;
+                if(document.getElementById('html5-player').textTracks[0]) document.getElementById('html5-player').textTracks[0].mode = 'showing';
+                toast("Subtitles Loaded", "success");
+            };
+            reader.readAsText(file);
+        }
+
+        // --- AI & CHAT ---
+        async function askAI(query) {
+            const prompt = query || document.getElementById('chat-input').value.replace('@ai', '').trim();
+            if(!prompt) return;
+            if(!apiKey) return toast("API Key required", "error");
+            sendChat(null, prompt); toast("Thinking...", "info");
+            try {
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ contents: [{ parts: [{ text: "Short fun response: " + prompt }] }] })
+                });
+                const data = await res.json();
+                const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "Failed.";
+                const msgData = { type: 'chat', msg: text, user: 'AI', avatar: '✨', color: 'bg-purple-600' };
+                addChat('AI', text, '✨', 'bg-purple-600'); playNotificationSound();
+                if(state.mode === 'create') broadcast(msgData); else if(hostConn) hostConn.send(msgData);
+            } catch(e) { toast("AI Error", "error"); }
+        }
+        function sendChat(e, manualMsg = null) {
+            if(e) e.preventDefault();
+            const inp = document.getElementById('chat-input');
+            const msg = manualMsg || inp.value.trim();
+            if(!msg) return;
+            if(msg.startsWith('@ai') && !manualMsg) { askAI(msg.replace('@ai', '').trim()); inp.value = ''; return; }
+            const data = { type: 'chat', msg, user: state.username, avatar: state.avatar, color: state.color };
+            addChat(state.username, msg, state.avatar, state.color, true); playNotificationSound();
+            if(state.mode === 'create') broadcast(data); else if(hostConn) hostConn.send(data);
+            if(inp) inp.value = '';
+        }
+        function sendEmoji(e) { sendChat(null, e); }
+        function addChat(user, msg, avatar, color, isMe=false) {
+            const box = document.getElementById('chat-container');
+            const div = document.createElement('div');
+            div.className = `flex gap-3 ${isMe ? 'flex-row-reverse' : ''} animate-fade`;
+            div.innerHTML = `<div class="w-8 h-8 rounded-full ${color} flex items-center justify-center text-xs shrink-0 text-white shadow-sm">${avatar}</div><div class="${isMe ? 'bg-indigo-600 text-white' : 'bg-[#1f2937] text-slate-200'} p-3 rounded-2xl text-sm max-w-[85%] shadow-md"><p class="text-[9px] opacity-70 mb-1 font-bold uppercase tracking-wide">${user}</p><p class="leading-relaxed">${msg}</p></div>`;
+            box.appendChild(div); box.scrollTop = box.scrollHeight;
+        }
+        function addSystemMsg(text) {
+            const box = document.getElementById('chat-container');
+            const div = document.createElement('div');
+            div.className = "text-center text-[10px] text-slate-500 my-3 bg-[#151923] py-1 px-3 rounded-full mx-auto inline-block border border-slate-800";
+            div.innerText = text;
+            box.appendChild(div); box.scrollTop = box.scrollHeight;
+        }
+
+        // --- UTILS ---
+        function toggleSettings() { const m = document.getElementById('settings-modal'); if(m.open) m.close(); else m.showModal(); }
+        function toggleMobileChat() { 
+            const sb = document.getElementById('chat-sidebar');
+            if(sb.classList.contains('translate-x-full')) { sb.classList.remove('translate-x-full'); document.getElementById('chat-badge').classList.add('hidden'); }
+            else sb.classList.add('translate-x-full');
+        }
+        function toggleFullscreen() {
+            const elem = document.getElementById('video-box');
+            if (!document.fullscreenElement) { elem.requestFullscreen().catch(err => toast("FS Error", "error")); } 
+            else { document.exitFullscreen(); }
+        }
+        function switchTab(tab) {
+            const cChat = document.getElementById('view-chat'); const cUsers = document.getElementById('view-users');
+            const tChat = document.getElementById('tab-chat'); const tUsers = document.getElementById('tab-users');
+            if(tab === 'chat') { cChat.classList.remove('hidden'); cUsers.classList.add('hidden'); tChat.classList.replace('inactive', 'active'); tUsers.classList.replace('active', 'inactive'); }
+            else { cChat.classList.add('hidden'); cUsers.classList.remove('hidden'); tUsers.classList.replace('inactive', 'active'); tChat.classList.replace('active', 'inactive'); }
+        }
+        function saveSettings() {
+            const name = document.getElementById('modal-username').value;
+            apiKey = document.getElementById('ai-api-key').value;
+            if(name) state.username = name;
+            localStorage.setItem('zg_p2p_profile', JSON.stringify({ name: state.username, avatar: state.avatar, color: state.color, apiKey }));
+            
+            // Sync Profile Update
+            if(state.mode === 'create') { 
+                const me = userList.find(u => u.id === state.id); 
+                if(me) { me.username = name; me.avatar = state.avatar; me.color = state.color; }
+                broadcastUserList();
+                updateProfileUI();
+            } else if(hostConn && hostConn.open) {
+                hostConn.send({ type: 'update-profile', username: state.username, avatar: state.avatar, color: state.color });
+                updateProfileUI();
+            }
+            toggleSettings(); toast("Settings Saved", "success");
+        }
+        function toggleHostOnly() {
+            if(state.mode !== 'create') return toast("Host Only", "error");
+            state.hostOnly = !state.hostOnly;
+            const btn = document.getElementById('btn-host-only'); const knob = btn.firstElementChild;
+            if(state.hostOnly) { btn.classList.add('bg-indigo-600'); btn.classList.remove('bg-slate-700'); knob.classList.add('translate-x-5'); }
+            else { btn.classList.remove('bg-indigo-600'); btn.classList.add('bg-slate-700'); knob.classList.remove('translate-x-5'); }
+            broadcast({ type: 'settings', key: 'hostOnly', val: state.hostOnly });
+        }
+        function toggleRoomLock() {
+            if(state.mode !== 'create') return toast("Host Only", "error");
+            state.isLocked = !state.isLocked;
+            updateLockUI(state.isLocked);
+            const btn = document.getElementById('btn-lock-room'); const knob = btn.firstElementChild;
+            if(state.isLocked) { btn.classList.add('bg-indigo-600'); btn.classList.remove('bg-slate-700'); knob.classList.add('translate-x-5'); }
+            else { btn.classList.remove('bg-indigo-600'); btn.classList.add('bg-slate-700'); knob.classList.remove('translate-x-5'); }
+            broadcast({ type: 'settings', key: 'isLocked', val: state.isLocked });
+        }
+        function updateLockUI(locked) { const i = document.getElementById('room-locked-indicator'); if(locked) i.classList.remove('hidden'); else i.classList.add('hidden'); }
+        function copyId() {
+            const id = document.getElementById('my-peer-id').innerText;
+            if(id === '...') return;
+            navigator.clipboard.writeText(id).then(() => toast("Copied!", "success"));
+        }
+        function toast(msg, type='info') {
+            const c = document.getElementById('toast-container');
+            const d = document.createElement('div');
+            let cl = 'bg-[#151923] border-slate-700';
+            if(type=='success') cl='bg-emerald-900/80 border-emerald-500/50';
+            if(type=='error') cl='bg-red-900/80 border-red-500/50';
+            d.className = `${cl} text-white border px-4 py-3 rounded-xl text-xs font-bold shadow-2xl backdrop-blur-md flex items-center gap-3 toast-enter`;
+            d.innerHTML = type === 'success' ? `<i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i> ${msg}` : (type === 'error' ? `<i data-lucide="alert-circle" class="w-4 h-4 text-red-400"></i> ${msg}` : msg);
+            c.appendChild(d); lucide.createIcons(); setTimeout(()=>d.remove(), 3000);
+        }
+    </script>
 </body>
 </html>
